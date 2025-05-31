@@ -1,22 +1,31 @@
 "use client";
 import { useState } from "react";
-import { CheckCircle2, Circle, Trash2 } from "lucide-react";
+import { CheckCircle2, Circle, Trash2, Plus, StickyNote, X, ArrowLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
+
+const PRIORITY_COLORS = {
+  High: "bg-red-100 text-red-700",
+  Medium: "bg-yellow-100 text-yellow-700",
+  Low: "bg-green-100 text-green-700",
+};
 
 type InboxItem = { id: string; content: string };
-type TaskItem = { id: string; title: string; done: boolean };
+type TaskItem = { id: string; title: string; done: boolean; priority: "High" | "Medium" | "Low" };
 type NoteItem = { id: string; content: string };
 
 export default function InboxPage() {
+  const router = useRouter();
   const [entries, setEntries] = useState<InboxItem[]>([]);
-  const [input, setInput] = useState("");
-
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [notes, setNotes] = useState<NoteItem[]>([]);
+  const [showModal, setShowModal] = useState(false);
+  const [input, setInput] = useState("");
 
   const addEntry = () => {
     if (!input.trim()) return;
     setEntries([{ id: crypto.randomUUID(), content: input.trim() }, ...entries]);
     setInput("");
+    setShowModal(false);
   };
 
   const deleteEntry = (id: string) => {
@@ -28,7 +37,11 @@ export default function InboxPage() {
     if (!entry) return;
 
     if (type === "task") {
-      setTasks([{ id: crypto.randomUUID(), title: entry.content, done: false }, ...tasks]);
+      const priority = prompt("Set priority (High, Medium, Low):", "Medium") as
+        | "High"
+        | "Medium"
+        | "Low";
+      setTasks([{ id: crypto.randomUUID(), title: entry.content, done: false, priority }, ...tasks]);
     } else if (type === "note") {
       setNotes([{ id: crypto.randomUUID(), content: entry.content }, ...notes]);
     }
@@ -44,52 +57,110 @@ export default function InboxPage() {
     setTasks(tasks.filter(t => t.id !== id));
   };
 
-  return (
-    <div className="max-w-5xl mx-auto py-10 space-y-10">
-      {/* Inbox Input */}
-      <section>
-        <h1 className="text-2xl font-bold mb-4">📥 Inbox</h1>
-        <div className="flex gap-4">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Capture a quick note..."
-            className="flex-1 border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button
-            onClick={addEntry}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
-            Add
-          </button>
-        </div>
+  const deleteNote = (id: string) => {
+    setNotes(notes.filter(n => n.id !== id));
+  };
 
-        {/* Inbox Items */}
-        <ul className="mt-6 space-y-4">
-          {entries.map((item) => (
+  return (
+    <div className="max-w-6xl mx-auto py-10 px-4 space-y-10">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.back()}
+            className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+          >
+            <ArrowLeft className="w-4 h-4" /> Back
+          </button>
+          <h1 className="text-3xl font-bold">📥 Inbox</h1>
+        </div>
+        <button
+          onClick={() => setShowModal(true)}
+          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          <Plus className="w-4 h-4" /> Add Entry
+        </button>
+      </div>
+
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex justify-center items-center">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+            <h2 className="text-lg font-semibold mb-4">New Inbox Entry</h2>
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Capture a quick note..."
+              className="w-full border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setShowModal(false)} className="px-4 py-2 border rounded text-gray-500">
+                Cancel
+              </button>
+              <button onClick={addEntry} className="px-4 py-2 bg-blue-600 text-white rounded">
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inbox List */}
+      <ul className="space-y-4">
+        {entries.map((item) => (
+          <li
+            key={item.id}
+            className="bg-white border p-4 rounded shadow flex justify-between items-start gap-4"
+          >
+            <p className="text-sm text-gray-700 flex-1">{item.content}</p>
+            <div className="flex flex-col gap-1 text-sm">
+              <button
+                onClick={() => convertEntry(item.id, "task")}
+                className="text-blue-500 hover:underline"
+              >
+                ➕ Task
+              </button>
+              <button
+                onClick={() => convertEntry(item.id, "note")}
+                className="text-green-600 hover:underline"
+              >
+                📝 Note
+              </button>
+              <button
+                onClick={() => deleteEntry(item.id)}
+                className="text-red-500 hover:underline"
+              >
+                🗑 Delete
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {/* Tasks Section */}
+      <section>
+        <h2 className="text-2xl font-semibold mb-4">🧩 Tasks</h2>
+        <ul className="space-y-3">
+          {tasks.map((task) => (
             <li
-              key={item.id}
-              className="bg-white border p-4 rounded shadow flex justify-between items-start gap-4"
+              key={task.id}
+              className={`border px-4 py-3 rounded flex items-center justify-between shadow-sm ${PRIORITY_COLORS[task.priority]}`}
             >
-              <p className="text-sm text-gray-700 flex-1">{item.content}</p>
-              <div className="flex flex-col gap-1 text-sm">
-                <button
-                  onClick={() => convertEntry(item.id, "task")}
-                  className="text-blue-500 hover:underline"
-                >
-                  ➕ Task
-                </button>
-                <button
-                  onClick={() => convertEntry(item.id, "note")}
-                  className="text-green-600 hover:underline"
-                >
-                  📝 Note
-                </button>
-                <button
-                  onClick={() => deleteEntry(item.id)}
-                  className="text-red-500 hover:underline"
-                >
-                  🗑 Delete
+              <div
+                onClick={() => toggleTask(task.id)}
+                className="flex items-center gap-2 cursor-pointer"
+              >
+                {task.done ? (
+                  <CheckCircle2 className="text-green-600 w-5 h-5" />
+                ) : (
+                  <Circle className="text-gray-400 w-5 h-5" />
+                )}
+                <span className={`${task.done ? "line-through text-gray-400" : ""}`}>{task.title}</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="px-2 py-1 rounded bg-white border font-semibold">{task.priority}</span>
+                <button onClick={() => deleteTask(task.id)} className="text-red-500 hover:text-red-700">
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </li>
@@ -97,65 +168,26 @@ export default function InboxPage() {
         </ul>
       </section>
 
-      {/* Task Section */}
+      {/* Sticky Notes Section */}
       <section>
-        <h2 className="text-xl font-semibold mb-4">🧩 Todo Tasks</h2>
-        {tasks.length === 0 ? (
-          <p className="text-gray-400 text-sm">No tasks yet.</p>
-        ) : (
-          <ul className="space-y-3">
-            {tasks.map((task) => (
-              <li
-                key={task.id}
-                className="bg-gray-50 border px-4 py-3 rounded flex items-center justify-between"
+        <h2 className="text-2xl font-semibold mb-4">🗒 Sticky Notes</h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {notes.map((note) => (
+            <div
+              key={note.id}
+              className="relative p-4 rounded-lg shadow-md min-h-[120px] text-sm font-medium break-words border-l-4 border-yellow-400 bg-yellow-50 before:absolute before:top-0 before:right-0 before:w-5 before:h-5 before:bg-yellow-300 before:rounded-bl-lg"
+            >
+              <StickyNote className="absolute top-2 right-6 text-yellow-400 w-4 h-4" />
+              <button
+                onClick={() => deleteNote(note.id)}
+                className="absolute top-2 right-2 text-red-500 hover:text-red-700"
               >
-                <div
-                  onClick={() => toggleTask(task.id)}
-                  className="flex items-center gap-2 cursor-pointer"
-                >
-                  {task.done ? (
-                    <CheckCircle2 className="text-green-600 w-5 h-5" />
-                  ) : (
-                    <Circle className="text-gray-400 w-5 h-5" />
-                  )}
-                  <span className={`${task.done ? "line-through text-gray-400" : ""}`}>
-                    {task.title}
-                  </span>
-                </div>
-                <button onClick={() => deleteTask(task.id)} className="text-red-500 hover:text-red-700">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {/* Notes Section */}
-      <section>
-        <h2 className="text-xl font-semibold mb-4">🗒 Sticky Notes</h2>
-        {notes.length === 0 ? (
-          <p className="text-gray-400 text-sm">No notes yet.</p>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {notes.map((note, idx) => (
-              <div
-                key={note.id}
-                className={`p-4 rounded shadow text-sm font-medium whitespace-pre-wrap break-words
-                  ${
-                    idx % 3 === 0
-                      ? "bg-yellow-100"
-                      : idx % 3 === 1
-                      ? "bg-pink-100"
-                      : "bg-green-100"
-                  }
-                `}
-              >
-                {note.content}
-              </div>
-            ))}
-          </div>
-        )}
+                <X className="w-4 h-4" />
+              </button>
+              {note.content}
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   );
