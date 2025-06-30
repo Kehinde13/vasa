@@ -1,14 +1,12 @@
 
-import { Geist, Geist_Mono } from "next/font/google";
+import { Work_Sans } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "./context/AuthContext";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+
+const workSans = Work_Sans({
+  variable: "--font-work-sans",
   subsets: ["latin"],
 });
 
@@ -20,9 +18,17 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-       
-        <main className="p-6">{children}</main>
+      <body className={`${workSans.variable} ${workSans.variable} antialiased`}>
+       <AuthProvider>
+          <main className="p-6 bg-white dark:bg-gray-900">{children}</main>
+        </AuthProvider>
+        <footer className="bg-gray-100 py-4 dark:bg-gray-800">
+          <div className="container mx-auto text-center">
+            <p className="text-sm text-gray-600">
+              &copy; {new Date().getFullYear()} VAsA. All rights reserved.
+            </p>
+          </div>
+        </footer>
       </body>
     </html>
   );

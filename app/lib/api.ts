@@ -18,7 +18,7 @@ export interface AuthResponse {
   user: unknown;
 }
 
-const BASE_URL = 'http://localhost:5000/api/auth';
+const BASE_URL = 'https://vasa-backend-k9op.vercel.app/api/auth';
 
 export async function registerUser(data: UserPayload): Promise<AuthResponse> {
   const res = await fetch(`${BASE_URL}/register`, {

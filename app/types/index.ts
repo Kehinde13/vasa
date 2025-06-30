@@ -30,3 +30,15 @@ export interface Invoice {
   status: 'sent' | 'paid' | 'overdue';
   dateIssued: Date;
 }
+
+
+export interface User {
+  fullName: string;
+  email: string;
+  businessName: string;
+  role: 'VA' | 'Team Lead' | 'Client';
+  phone: string;
+  timeZone: string;
+  businessType: string;
+  services: string[];
+}

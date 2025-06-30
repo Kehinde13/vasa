@@ -1,35 +1,28 @@
-
+import Link from "next/link";
+import DashboardHeader from "../components/DashboardHeader";
+import { FaInbox, FaUsers, FaClipboardList } from "react-icons/fa";
 
 export default function DashboardPage() {
   return (
     <>
-      <h1 className="text-2xl font-bold mb-6">📊 Dashboard</h1>
-      <p className="text-gray-600 text-base mb-6">
-        Welcome, <span className="font-semibold">Folaji</span> 👋
-      </p>
+      <DashboardHeader />
 
-      {/* Widgets */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        <Widget title="📌 Today’s Tasks" value="3 pending" />
-        <Widget title="📥 Unread Messages" value="5 new" />
-        <Widget title="🧾 Overdue Invoices" value="2 unpaid" />
-        <Widget title="👥 Recent Clients Activities" value="" />
+      {/* Recently Visited Panel */}
+      <section className="mb-10">
+        <h2 className="text-lg font-semibold mb-4 dark:text-white">🕑 Recently Visited</h2>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <VisitedLink href="/dashboard/inbox" icon={<FaInbox />} label="Inbox" />
+          <VisitedLink href="/dashboard/clients" icon={<FaUsers />} label="Clients" />
+          <VisitedLink href="/dashboard/projects" icon={<FaClipboardList />} label="Projects" />
+        </div>
       </section>
 
-      {/* Demo Video Panel */}
+      {/* Learn Panel */}
       <section>
-        <h2 className="text-lg font-semibold mb-4">🎥 Getting Started</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <h2 className="text-lg font-semibold mb-4 dark:text-white">🎓 Learn</h2>
+        <div className="max-w-xl">
           <VideoCard
             title="Overview of VAsA"
-            url="https://www.youtube.com/embed/ysz5S6PUM-U"
-          />
-          <VideoCard
-            title="Managing Clients"
-            url="https://www.youtube.com/embed/ysz5S6PUM-U"
-          />
-          <VideoCard
-            title="Tracking Tasks & Invoices"
             url="https://www.youtube.com/embed/ysz5S6PUM-U"
           />
         </div>
@@ -38,28 +31,39 @@ export default function DashboardPage() {
   );
 }
 
-// 🧩 Widget component
-function Widget({ title, value }: { title: string; value: string }) {
+// 🧭 Visited Link component
+function VisitedLink({
+  href,
+  label,
+  icon,
+}: {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+}) {
   return (
-    <div className="p-5 rounded-lg border bg-white shadow hover:shadow-md transition">
-      <h3 className="text-sm text-gray-600 mb-2">{title}</h3>
-      <p className="text-xl font-bold">{value}</p>
-    </div>
+    <Link
+      href={href}
+      className="flex items-center gap-2 flex-1 p-3 rounded-lg border bg-white dark:bg-gray-800 dark:border-gray-700 shadow hover:shadow-md hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+    >
+      <span className="text-gray-600 dark:text-gray-300">{icon}</span>
+      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{label}</span>
+    </Link>
   );
 }
 
-// 🎞️ Video card component
+// 🎞️ Video Card component
 function VideoCard({ title, url }: { title: string; url: string }) {
   return (
-    <div className="rounded-lg overflow-hidden border bg-white shadow hover:shadow-md transition">
+    <div className="rounded-lg overflow-hidden border bg-white dark:bg-gray-800 dark:border-gray-700 shadow hover:shadow-md transition">
       <iframe
-        className="w-full h-48"
+        className="w-full h-64"
         src={url}
         title={title}
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
       />
-      <div className="p-4 text-sm font-semibold">{title}</div>
+      <div className="p-4 text-sm font-semibold dark:text-white">{title}</div>
     </div>
   );
 }

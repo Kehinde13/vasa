@@ -17,10 +17,16 @@ interface TimeBlock {
 
 const hours = Array.from({ length: 15 }, (_, i) => 7 + i); // 7 AM to 9 PM
 const minutesOptions = [0, 15, 30, 45, 60];
+
 const getFormattedDate = (offset: number) => {
   const d = new Date();
   d.setDate(d.getDate() + offset);
   return d.toISOString().split("T")[0];
+};
+
+const getDayName = (dateStr: string) => {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString(undefined, { weekday: "long" });
 };
 
 export default function DailyPlanner() {
@@ -142,15 +148,18 @@ END:VCALENDAR`;
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-4 max-w-4xl mx-auto space-y-6 text-gray-900 dark:text-gray-100">
       <div className="flex justify-between items-center">
-        <button onClick={() => router.back()} className="text-sm text-blue-600 underline">
+        <button onClick={() => router.back()} className="text-sm text-blue-600 dark:text-blue-400 underline">
           ← Back
         </button>
-        <div className="flex gap-2">
-          <CalendarDays className="w-5 h-5 text-blue-600" />
-          <button onClick={exportToICS} className="text-blue-600 font-semibold hover:underline">
-            Export to Calendar
+        <div className="flex gap-2 items-center">
+          <CalendarDays className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          <button
+            onClick={exportToICS}
+            className="text-blue-600 dark:text-blue-400 font-medium hover:underline"
+          >
+            Add to Google Calendar
           </button>
         </div>
       </div>
@@ -160,28 +169,37 @@ END:VCALENDAR`;
           <button
             key={d}
             onClick={() => setSelectedDate(d)}
-            className={`px-4 py-2 border rounded ${selectedDate === d ? "bg-blue-600 text-white" : ""}`}
+            className={`flex-shrink-0 px-3 py-2 rounded border ${
+              selectedDate === d
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 dark:bg-gray-700 dark:text-gray-200"
+            }`}
           >
-            {d}
+            {getDayName(d)}
           </button>
         ))}
       </div>
 
-      <div className="grid gap-3">
+      <div className="grid gap-4 md:grid-cols-2">
         {hours.map((hour) => (
-          <div key={hour} className="border rounded p-3">
-            <div className="text-sm text-gray-600 font-semibold mb-2">{formatTime(hour, 0)}</div>
+          <div
+            key={hour}
+            className="border rounded-lg p-3 bg-white dark:bg-gray-800 shadow-sm"
+          >
+            <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
+              {formatTime(hour, 0)}
+            </div>
             {(blocksMap[selectedDate] || [])
               .filter((b) => b.startHour === hour)
               .map((block) => (
                 <div
                   key={block.id}
-                  className={`p-2 rounded text-sm mb-2 text-white flex justify-between items-center ${
+                  className={`flex justify-between items-center p-2 rounded text-sm text-white mb-2 ${
                     block.type === "task"
                       ? "bg-blue-500"
                       : block.type === "meeting"
                       ? "bg-green-500"
-                      : "bg-yellow-500"
+                      : "bg-yellow-500 text-black"
                   }`}
                 >
                   <span>
@@ -194,16 +212,19 @@ END:VCALENDAR`;
                   </div>
                 </div>
               ))}
-            <button onClick={() => openModal()} className="text-xs text-blue-600 hover:underline">
-              + Add Block
+            <button
+              onClick={() => openModal()}
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1"
+            >
+              New Block
             </button>
           </div>
         ))}
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
-          <div className="bg-white p-6 rounded shadow-md w-full max-w-md">
+        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 p-6 rounded-lg w-full max-w-md shadow-lg">
             <div className="flex justify-between mb-4">
               <h2 className="text-lg font-semibold">
                 {modalData.editing ? "Edit" : "New"} Time Block
@@ -214,76 +235,68 @@ END:VCALENDAR`;
               value={modalData.title}
               onChange={(e) => setModalData({ ...modalData, title: e.target.value })}
               placeholder="Title"
-              className="border px-3 py-2 w-full rounded mb-3"
+              className="border dark:border-gray-700 px-3 py-2 w-full rounded mb-3 bg-gray-50 dark:bg-gray-800"
             />
             <select
               value={modalData.type}
               onChange={(e) => setModalData({ ...modalData, type: e.target.value as BlockType })}
-              className="border px-2 py-1 rounded w-full mb-3"
+              className="border dark:border-gray-700 px-2 py-1 rounded w-full mb-3 bg-gray-50 dark:bg-gray-800"
             >
               <option value="task">Task</option>
               <option value="meeting">Meeting</option>
               <option value="focus">Focus</option>
             </select>
             <div className="grid grid-cols-2 gap-4 mb-3">
-              <div>
-                <label className="text-xs">Start Time</label>
-                <div className="flex gap-2">
-                  <select
-                    value={modalData.startHour}
-                    onChange={(e) => setModalData({ ...modalData, startHour: parseInt(e.target.value) })}
-                    className="border px-2 py-1 rounded w-full"
-                  >
-                    {hours.map((h) => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={modalData.startMinute}
-                    onChange={(e) => setModalData({ ...modalData, startMinute: parseInt(e.target.value) })}
-                    className="border px-2 py-1 rounded w-full"
-                  >
-                    {minutesOptions.map((m) => (
-                      <option key={m} value={m}>
-                        {m.toString().padStart(2, "0")}
-                      </option>
-                    ))}
-                  </select>
+              {["Start", "End"].map((label, idx) => (
+                <div key={label}>
+                  <label className="text-xs">{label} Time</label>
+                  <div className="flex gap-2">
+                    <select
+                      value={idx === 0 ? modalData.startHour : modalData.endHour}
+                      onChange={(e) =>
+                        setModalData({
+                          ...modalData,
+                          ...(idx === 0
+                            ? { startHour: parseInt(e.target.value) }
+                            : { endHour: parseInt(e.target.value) }),
+                        })
+                      }
+                      className="border dark:border-gray-700 px-2 py-1 rounded w-full bg-gray-50 dark:bg-gray-800"
+                    >
+                      {hours.map((h) => (
+                        <option key={h} value={h}>
+                          {h}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={idx === 0 ? modalData.startMinute : modalData.endMinute}
+                      onChange={(e) =>
+                        setModalData({
+                          ...modalData,
+                          ...(idx === 0
+                            ? { startMinute: parseInt(e.target.value) }
+                            : { endMinute: parseInt(e.target.value) }),
+                        })
+                      }
+                      className="border dark:border-gray-700 px-2 py-1 rounded w-full bg-gray-50 dark:bg-gray-800"
+                    >
+                      {minutesOptions.map((m) => (
+                        <option key={m} value={m}>
+                          {m.toString().padStart(2, "0")}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label className="text-xs">End Time</label>
-                <div className="flex gap-2">
-                  <select
-                    value={modalData.endHour}
-                    onChange={(e) => setModalData({ ...modalData, endHour: parseInt(e.target.value) })}
-                    className="border px-2 py-1 rounded w-full"
-                  >
-                    {hours.map((h) => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={modalData.endMinute}
-                    onChange={(e) => setModalData({ ...modalData, endMinute: parseInt(e.target.value) })}
-                    className="border px-2 py-1 rounded w-full"
-                  >
-                    {minutesOptions.map((m) => (
-                      <option key={m} value={m}>
-                        {m.toString().padStart(2, "0")}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              ))}
             </div>
             {errorMsg && <p className="text-red-600 text-sm mb-2">{errorMsg}</p>}
             <div className="flex justify-end">
-              <button onClick={saveBlock} className="bg-blue-600 text-white px-4 py-2 rounded">
+              <button
+                onClick={saveBlock}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+              >
                 Save
               </button>
             </div>

@@ -1,10 +1,10 @@
 "use client";
+
 import { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import mammoth from "mammoth";
 import {
   Plus, FileText, FileInput, FilePlus,
-  Eye, Pencil, Trash2, Download, ArrowLeft
+  Eye, Pencil, Trash2, Download, Cloud
 } from "lucide-react";
 
 type Doc = {
@@ -16,7 +16,6 @@ type Doc = {
 };
 
 export default function DocCentre() {
-  const router = useRouter();
 
   const [docs, setDocs] = useState<Doc[]>([]);
   const [form, setForm] = useState<Doc>({
@@ -75,10 +74,10 @@ export default function DocCentre() {
   };
 
   const getFileIcon = (fileName: string) => {
-    if (fileName.endsWith(".doc") || fileName.endsWith(".docx")) return <FileInput className="text-blue-600 w-5 h-5" />;
-    if (fileName.endsWith(".xls") || fileName.endsWith(".xlsx")) return <FileInput className="text-green-600 w-5 h-5" />;
-    if (fileName.endsWith(".pdf")) return <FileText className="text-red-600 w-5 h-5" />;
-    return <FilePlus className="text-gray-500 w-5 h-5" />;
+    if (fileName.endsWith(".doc") || fileName.endsWith(".docx")) return <FileInput className="text-blue-600 dark:text-blue-400 w-5 h-5" />;
+    if (fileName.endsWith(".xls") || fileName.endsWith(".xlsx")) return <FileInput className="text-green-600 dark:text-green-400 w-5 h-5" />;
+    if (fileName.endsWith(".pdf")) return <FileText className="text-red-600 dark:text-red-400 w-5 h-5" />;
+    return <FilePlus className="text-gray-500 dark:text-gray-400 w-5 h-5" />;
   };
 
   useEffect(() => {
@@ -98,28 +97,31 @@ export default function DocCentre() {
   }, [previewDoc]);
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
-      {/* 🔙 Back Button */}
-      <button
-        onClick={() => router.back()}
-        className="flex items-center gap-2 text-blue-600 hover:underline text-sm mb-4"
-      >
-        <ArrowLeft className="w-4 h-4" /> Back
-      </button>
-
+    <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">📁 Doc Centre</h1>
-        <button
-          onClick={() => {
-            resetForm();
-            setEditingDocId(null);
-            setShowModal(true);
-          }}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4" /> Add Document
-        </button>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold dark:text-white">📁 Doc Centre</h1>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => {
+              // You’d connect this to your Google Drive picker
+              alert("Google Drive integration coming soon!");
+            }}
+            className="flex items-center gap-2 border border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400 px-4 py-2 rounded hover:bg-blue-50 dark:hover:bg-blue-900/40"
+          >
+            <Cloud className="w-4 h-4" /> Connect Google Drive
+          </button>
+          <button
+            onClick={() => {
+              resetForm();
+              setEditingDocId(null);
+              setShowModal(true);
+            }}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4" /> Add Document
+          </button>
+        </div>
       </div>
 
       {/* Search & Filter */}
@@ -129,12 +131,12 @@ export default function DocCentre() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search by title..."
-          className="w-full md:w-1/2 border px-4 py-2 rounded"
+          className="w-full md:w-1/2 border dark:border-gray-700 dark:bg-gray-800 dark:text-white px-4 py-2 rounded"
         />
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="border px-4 py-2 rounded w-full md:w-1/4"
+          className="border dark:border-gray-700 dark:bg-gray-800 dark:text-white px-4 py-2 rounded w-full md:w-1/4"
         >
           {categories.map((cat) => (
             <option key={cat}>{cat}</option>
@@ -143,36 +145,36 @@ export default function DocCentre() {
       </div>
 
       {/* Document Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredDocs.map((doc) => (
           <div
             key={doc.id}
-            className="border rounded-lg p-4 bg-white shadow-sm space-y-2"
+            className="border dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900 shadow-sm space-y-2"
           >
             <div className="flex items-center gap-2">
-              {doc.file ? getFileIcon(doc.file.name) : <FileText className="w-5 h-5" />}
-              <h3 className="font-semibold text-sm">{doc.title}</h3>
+              {doc.file ? getFileIcon(doc.file.name) : <FileText className="w-5 h-5 dark:text-white" />}
+              <h3 className="font-semibold text-sm dark:text-white">{doc.title}</h3>
             </div>
-            <p className="text-xs text-gray-500">📂 {doc.category}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">📂 {doc.category}</p>
             {doc.file && (
-              <p className="text-xs">📎 {doc.file.name}</p>
+              <p className="text-xs text-gray-600 dark:text-gray-300">📎 {doc.file.name}</p>
             )}
             <div className="flex gap-2 mt-2 text-xs">
               <button
                 onClick={() => setPreviewDoc(doc)}
-                className="text-blue-600 hover:underline flex items-center gap-1"
+                className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
               >
                 <Eye className="w-4 h-4" /> View
               </button>
               <button
                 onClick={() => handleEdit(doc)}
-                className="text-green-600 hover:underline flex items-center gap-1"
+                className="text-green-600 dark:text-green-400 hover:underline flex items-center gap-1"
               >
                 <Pencil className="w-4 h-4" /> Edit
               </button>
               <button
                 onClick={() => handleDelete(doc.id)}
-                className="text-red-600 hover:underline flex items-center gap-1"
+                className="text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
               >
                 <Trash2 className="w-4 h-4" /> Delete
               </button>
@@ -181,32 +183,31 @@ export default function DocCentre() {
         ))}
       </div>
 
-      {/* ✅ Preview Modal */}
+      {/* Preview Modal */}
       {previewDoc && (
-        <div className="fixed inset-0 bg-black/40 z-50 backdrop-blur-sm flex justify-center items-center px-4">
-          <div className="bg-white w-full max-w-3xl rounded-lg p-6 space-y-4 shadow-xl max-h-[90vh] overflow-auto">
+        <div className="fixed inset-0 bg-black/60 z-50 backdrop-blur-sm flex justify-center items-center px-4">
+          <div className="bg-white dark:bg-gray-900 w-full max-w-3xl rounded-lg p-6 space-y-4 shadow-xl max-h-[90vh] overflow-auto">
             <div className="flex justify-between items-start">
               <div>
-                <h2 className="text-lg font-semibold">{previewDoc.title}</h2>
-                <p className="text-xs text-gray-500">📂 {previewDoc.category}</p>
+                <h2 className="text-lg font-semibold dark:text-white">{previewDoc.title}</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400">📂 {previewDoc.category}</p>
                 {previewDoc.file && (
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">
                     📎 {previewDoc.file.name}
                   </p>
                 )}
               </div>
               <button
                 onClick={() => setPreviewDoc(null)}
-                className="text-gray-400 hover:text-gray-600 text-sm"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm"
               >
                 ✕
               </button>
             </div>
 
-            {/* DOCX preview */}
             {previewDoc.file?.name.endsWith(".docx") ? (
               <div
-                className="prose prose-sm max-w-none"
+                className="prose prose-sm dark:prose-invert max-w-none"
                 dangerouslySetInnerHTML={{ __html: docxHTML }}
               />
             ) : previewDoc.file?.type === "application/pdf" ? (
@@ -215,7 +216,7 @@ export default function DocCentre() {
                 className="w-full h-96 border rounded"
               />
             ) : (
-              <p className="text-sm text-gray-600">No preview available</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">No preview available</p>
             )}
 
             {previewDoc.file && (
@@ -232,11 +233,11 @@ export default function DocCentre() {
         </div>
       )}
 
-      {/* ➕ Add/Edit Modal */}
+      {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center px-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-lg space-y-4">
-            <h2 className="text-xl font-semibold text-gray-800">
+          <div className="bg-white dark:bg-gray-900 rounded-xl p-6 w-full max-w-md shadow-lg space-y-4">
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
               {editingDocId ? "Edit Document" : "Upload New Document"}
             </h2>
 
@@ -245,22 +246,22 @@ export default function DocCentre() {
               value={form.title}
               onChange={handleChange}
               placeholder="Document Title"
-              className="w-full border px-4 py-2 rounded-lg"
+              className="w-full border dark:border-gray-700 dark:bg-gray-800 dark:text-white px-4 py-2 rounded-lg"
             />
             <input
               name="category"
               value={form.category}
               onChange={handleChange}
               placeholder="Category (e.g. Legal, Finance)"
-              className="w-full border px-4 py-2 rounded-lg"
+              className="w-full border dark:border-gray-700 dark:bg-gray-800 dark:text-white px-4 py-2 rounded-lg"
             />
 
             <label
               htmlFor="file-upload"
-              className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-blue-400 rounded-lg cursor-pointer bg-blue-50 hover:bg-blue-100"
+              className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-blue-400 rounded-lg cursor-pointer bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40"
             >
-              <p className="text-sm text-blue-700">📎 Upload a file</p>
-              <p className="text-xs text-gray-500">(Word, Excel, PDF)</p>
+              <p className="text-sm text-blue-700 dark:text-blue-300">📎 Upload a file</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">(Word, Excel, PDF)</p>
               <input
                 id="file-upload"
                 name="file"
@@ -272,7 +273,7 @@ export default function DocCentre() {
             </label>
 
             {form.file && (
-              <p className="text-sm text-gray-600">📄 {form.file.name}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">📄 {form.file.name}</p>
             )}
 
             <div className="flex justify-end gap-2 pt-2">
@@ -282,7 +283,7 @@ export default function DocCentre() {
                   setEditingDocId(null);
                   resetForm();
                 }}
-                className="px-4 py-2 border rounded-lg text-gray-600"
+                className="px-4 py-2 border dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-300"
               >
                 Cancel
               </button>
