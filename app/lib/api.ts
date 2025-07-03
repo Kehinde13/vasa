@@ -20,7 +20,7 @@ export interface AuthResponse {
   user: User;
 }
 
-const BASE_URL = 'http://localhost:5000/api/auth'; 
+const BASE_URL = 'https://vasabackend.onrender.com/api/auth'; 
 
 /**
  * Helper for fetch with AbortController and error handling.
