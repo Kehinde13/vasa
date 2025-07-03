@@ -9,14 +9,18 @@ import {
 import { useSession, signIn } from "next-auth/react";
 
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY!;
-/* const PICKER_CLIENT_ID = process.env.GOOGLE_CLIENT_ID; */
+ 
+ /* const PICKER_CLIENT_ID = process.env.GOOGLE_CLIENT_ID; */
 
 if (!API_KEY) console.error("Missing NEXT_PUBLIC_GOOGLE_API_KEY");
-/* if (!PICKER_CLIENT_ID) console.error("Missing NEXT_PUBLIC_GOOGLE_CLIENT_ID"); */
+ 
+ /* if (!PICKER_CLIENT_ID) console.error("Missing NEXT_PUBLIC_GOOGLE_CLIENT_ID"); */
 
 declare global {
   interface Window {
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     gapi: any;
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     google: any;
   }
 }
@@ -56,13 +60,15 @@ export default function DocCentre() {
 
   const resetForm = () => setForm({ id: "", title: "", category: "", file: null, content: "" });
 
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   const handleChange = (e: any) => {
     const { name, value, files } = e.target;
     if (name === "file" && files?.length) {
       const newFile = files[0];
       setForm({ ...form, file: newFile });
       const reader = new FileReader();
-      reader.onload = async (e) => {
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+      reader.onload = async (e: any) => {
         const arrayBuffer = e.target?.result;
         if (arrayBuffer instanceof ArrayBuffer) {
           const result = await mammoth.convertToHtml({ arrayBuffer });
@@ -133,6 +139,7 @@ export default function DocCentre() {
       .addView(view)
       .setOAuthToken(session.accessToken)
       .setDeveloperKey(API_KEY)
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
       .setCallback(async (data: any) => {
         if (data.action === window.google.picker.Action.PICKED) {
           const picked = data.docs[0];
