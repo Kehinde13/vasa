@@ -42,3 +42,15 @@ export interface User {
   businessType: string;
   services: string[];
 }
+
+type BlockType = "task" | "meeting" | "focus";
+
+export interface TimeBlock {
+  id: string;
+  startHour: number;
+  startMinute: number;
+  endHour: number;
+  endMinute: number;
+  title: string;
+  type: BlockType;
+}

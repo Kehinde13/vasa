@@ -6,6 +6,20 @@ import {
   Plus, FileText, FileInput, FilePlus,
   Eye, Pencil, Trash2, Download, Cloud
 } from "lucide-react";
+import { useSession, signIn } from "next-auth/react";
+
+const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY!;
+/* const PICKER_CLIENT_ID = process.env.GOOGLE_CLIENT_ID; */
+
+if (!API_KEY) console.error("Missing NEXT_PUBLIC_GOOGLE_API_KEY");
+/* if (!PICKER_CLIENT_ID) console.error("Missing NEXT_PUBLIC_GOOGLE_CLIENT_ID"); */
+
+declare global {
+  interface Window {
+    gapi: any;
+    google: any;
+  }
+}
 
 type Doc = {
   id: string;
@@ -16,6 +30,7 @@ type Doc = {
 };
 
 export default function DocCentre() {
+  const { data: session } = useSession();
 
   const [docs, setDocs] = useState<Doc[]>([]);
   const [form, setForm] = useState<Doc>({
@@ -41,11 +56,26 @@ export default function DocCentre() {
 
   const resetForm = () => setForm({ id: "", title: "", category: "", file: null, content: "" });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleChange = (e: any) => {
     const { name, value, files } = e.target;
     if (name === "file" && files?.length) {
-      setForm({ ...form, file: files[0] });
+      const newFile = files[0];
+      setForm({ ...form, file: newFile });
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const arrayBuffer = e.target?.result;
+        if (arrayBuffer instanceof ArrayBuffer) {
+          const result = await mammoth.convertToHtml({ arrayBuffer });
+          setDocs(prev => [...prev, {
+            id: crypto.randomUUID(),
+            title: newFile.name,
+            category: "Uploaded",
+            file: newFile,
+            content: result.value,
+          }]);
+        }
+      };
+      reader.readAsArrayBuffer(newFile);
     } else {
       setForm({ ...form, [name]: value });
     }
@@ -81,6 +111,73 @@ export default function DocCentre() {
   };
 
   useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://apis.google.com/js/api.js";
+    script.onload = () => window.gapi.load("client:picker", () => {});
+    document.body.appendChild(script);
+  }, []);
+
+  const openPicker = () => {
+
+    if (!session) {
+      return signIn("google");
+    }
+
+    if (!session?.accessToken || !window.google?.picker) return alert("Google Picker not loaded or session missing");
+
+    const view = new window.google.picker.DocsView()
+      .setIncludeFolders(true)
+      .setSelectFolderEnabled(true);
+
+    const picker = new window.google.picker.PickerBuilder()
+      .addView(view)
+      .setOAuthToken(session.accessToken)
+      .setDeveloperKey(API_KEY)
+      .setCallback(async (data: any) => {
+        if (data.action === window.google.picker.Action.PICKED) {
+          const picked = data.docs[0];
+          const fileId = picked.id;
+          const fileName = picked.name;
+
+          try {
+            const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+              headers: {
+                Authorization: `Bearer ${session.accessToken}`,
+              },
+            });
+
+            const blob = await response.blob();
+            const file = new File([blob], fileName, { type: blob.type });
+
+            let content = "";
+            if (fileName.endsWith(".docx")) {
+              const arrayBuffer = await blob.arrayBuffer();
+              const result = await mammoth.convertToHtml({ arrayBuffer });
+              content = result.value;
+            }
+
+            const newDoc: Doc = {
+              id: crypto.randomUUID(),
+              title: fileName,
+              category: "Google Drive",
+              file,
+              content,
+            };
+
+            setDocs(prev => [...prev, newDoc]);
+            setPreviewDoc(newDoc);
+          } catch (err) {
+            console.error("Failed to download Google Drive file:", err);
+            alert("Unable to fetch the file from Google Drive.");
+          }
+        }
+      })
+      .build();
+
+    picker.setVisible(true);
+  };
+
+  useEffect(() => {
     if (previewDoc?.file && previewDoc.file.name.endsWith(".docx")) {
       const reader = new FileReader();
       reader.onload = async (e) => {
@@ -98,19 +195,10 @@ export default function DocCentre() {
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
-      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h1 className="text-2xl md:text-3xl font-bold dark:text-white">📁 Doc Centre</h1>
         <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => {
-              // You’d connect this to your Google Drive picker
-              alert("Google Drive integration coming soon!");
-            }}
-            className="flex items-center gap-2 border border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400 px-4 py-2 rounded hover:bg-blue-50 dark:hover:bg-blue-900/40"
-          >
-            <Cloud className="w-4 h-4" /> Connect Google Drive
-          </button>
+          
           <button
             onClick={() => {
               resetForm();
@@ -124,7 +212,7 @@ export default function DocCentre() {
         </div>
       </div>
 
-      {/* Search & Filter */}
+       {/* Search & Filter */}
       <div className="flex flex-col md:flex-row gap-4 justify-between">
         <input
           type="text"
@@ -215,6 +303,10 @@ export default function DocCentre() {
                 src={URL.createObjectURL(previewDoc.file)}
                 className="w-full h-96 border rounded"
               />
+            ) : previewDoc.content ? (
+              <div className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
+                {previewDoc.content}
+              </div>
             ) : (
               <p className="text-sm text-gray-600 dark:text-gray-300">No preview available</p>
             )}
@@ -271,6 +363,14 @@ export default function DocCentre() {
                 className="hidden"
               />
             </label>
+
+             <button
+              onClick={openPicker}
+              className="flex items-center gap-2 border border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400 px-4 py-2 rounded hover:bg-blue-50 dark:hover:bg-blue-900/40"
+            >
+              <Cloud className="w-4 h-4" /> Connect Google Drive
+            </button>
+
 
             {form.file && (
               <p className="text-sm text-gray-600 dark:text-gray-300">📄 {form.file.name}</p>

@@ -9,7 +9,7 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex ">
       <MobileSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <DesktopSidebar />
 

@@ -1,22 +1,11 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { X, Trash2, Pencil, CalendarDays } from "lucide-react";
-
-type BlockType = "task" | "meeting" | "focus";
-
-interface TimeBlock {
-  id: string;
-  startHour: number;
-  startMinute: number;
-  endHour: number;
-  endMinute: number;
-  title: string;
-  type: BlockType;
-}
+import { X, Trash2, Pencil } from "lucide-react";
+import { signIn, useSession } from "next-auth/react";
+import { TimeBlock } from "@/app/types";
 
 const hours = Array.from({ length: 15 }, (_, i) => 7 + i); // 7 AM to 9 PM
-const minutesOptions = [0, 15, 30, 45, 60];
+const minutesOptions = [0, 15, 30, 45];
 
 const getFormattedDate = (offset: number) => {
   const d = new Date();
@@ -30,7 +19,6 @@ const getDayName = (dateStr: string) => {
 };
 
 export default function DailyPlanner() {
-  const router = useRouter();
   const days = Array.from({ length: 7 }, (_, i) => getFormattedDate(i));
   const [selectedDate, setSelectedDate] = useState(days[0]);
   const [blocksMap, setBlocksMap] = useState<Record<string, TimeBlock[]>>({});
@@ -41,11 +29,12 @@ export default function DailyPlanner() {
     endHour: 8,
     endMinute: 0,
     title: "",
-    type: "task" as BlockType,
+    type: "task" as "task" | "meeting" | "focus",
     id: "",
     editing: false,
   });
   const [errorMsg, setErrorMsg] = useState("");
+  const { data: session } = useSession();
 
   const openModal = (block?: TimeBlock) => {
     setErrorMsg("");
@@ -66,9 +55,36 @@ export default function DailyPlanner() {
     }
   };
 
-  const saveBlock = () => {
-    const { startHour, startMinute, endHour, endMinute, id, editing } = modalData;
+  const createGoogleEvent = async (block: TimeBlock) => {
+    if (!session?.accessToken) return;
 
+    const start = new Date(selectedDate);
+    start.setHours(block.startHour, block.startMinute);
+
+    const end = new Date(selectedDate);
+    end.setHours(block.endHour, block.endMinute);
+
+    try {
+      await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          summary: block.title,
+          description: `VAsA Planner - ${block.type}`,
+          start: { dateTime: start.toISOString() },
+          end: { dateTime: end.toISOString() },
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to create Google Calendar event:", err);
+    }
+  };
+
+  const saveBlock = async () => {
+    const { startHour, startMinute, endHour, endMinute, id, editing } = modalData;
     const start = new Date();
     start.setHours(startHour, startMinute);
     const end = new Date();
@@ -100,6 +116,8 @@ export default function DailyPlanner() {
 
     setBlocksMap({ ...blocksMap, [selectedDate]: updated });
     setShowModal(false);
+
+    if (!editing) await createGoogleEvent(modalData);
   };
 
   const deleteBlock = (id: string) => {
@@ -114,57 +132,17 @@ export default function DailyPlanner() {
     return `${hh}:${mm} ${ampm}`;
   };
 
-  const exportToICS = () => {
-    const events = (blocksMap[selectedDate] || [])
-      .map((block) => {
-        const dt = (h: number, m: number) => {
-          const d = new Date(selectedDate);
-          d.setHours(h, m);
-          return d.toISOString().replace(/[-:]/g, "").split(".")[0];
-        };
-        return `
-BEGIN:VEVENT
-SUMMARY:${block.title}
-DTSTART:${dt(block.startHour, block.startMinute)}
-DTEND:${dt(block.endHour, block.endMinute)}
-DESCRIPTION:VAsA Planner - ${block.type}
-END:VEVENT
-`;
-      })
-      .join("");
-
-    const ics = `BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//VAsA Planner//EN
-${events}
-END:VCALENDAR`;
-
-    const blob = new Blob([ics], { type: "text/calendar" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `planner-${selectedDate}.ics`;
-    a.click();
-  };
-
   return (
-    <div className="p-4 max-w-4xl mx-auto space-y-6 text-gray-900 dark:text-gray-100">
+    <div className="p-4 mx-auto space-y-6 text-gray-900 dark:text-gray-100">
       <div className="flex justify-between items-center">
-        <button onClick={() => router.back()} className="text-sm text-blue-600 dark:text-blue-400 underline">
-          ← Back
-        </button>
-        <div className="flex gap-2 items-center">
-          <CalendarDays className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-          <button
-            onClick={exportToICS}
-            className="text-blue-600 dark:text-blue-400 font-medium hover:underline"
-          >
-            Add to Google Calendar
-          </button>
-        </div>
+        {!session ? (
+          <button onClick={() => signIn("google")}>Connect Google Calendar</button>
+        ) : (
+          <p>Connected as {session.user?.email}</p>
+        )}
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-2">
+      <div className="flex gap-2 flex-wrap pb-2">
         {days.map((d) => (
           <button
             key={d}
@@ -203,8 +181,7 @@ END:VCALENDAR`;
                   }`}
                 >
                   <span>
-                    {block.title} ({formatTime(block.startHour, block.startMinute)} -{" "}
-                    {formatTime(block.endHour, block.endMinute)})
+                    {block.title} ({formatTime(block.startHour, block.startMinute)} - {formatTime(block.endHour, block.endMinute)})
                   </span>
                   <div className="flex gap-2">
                     <Pencil onClick={() => openModal(block)} className="w-4 h-4 cursor-pointer" />
@@ -239,7 +216,7 @@ END:VCALENDAR`;
             />
             <select
               value={modalData.type}
-              onChange={(e) => setModalData({ ...modalData, type: e.target.value as BlockType })}
+              onChange={(e) => setModalData({ ...modalData, type: e.target.value as "task" | "meeting" | "focus" })}
               className="border dark:border-gray-700 px-2 py-1 rounded w-full mb-3 bg-gray-50 dark:bg-gray-800"
             >
               <option value="task">Task</option>

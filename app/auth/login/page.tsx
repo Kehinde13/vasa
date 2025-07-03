@@ -1,31 +1,61 @@
 "use client";
-// This file is a client component for user login functionality in a Next.js application.   
-import { useState, ChangeEvent, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
-import { loginUser, LoginPayload } from '../../lib/api';
-import { saveAuth } from '../../utils/auth';
+
+import { useState, ChangeEvent, FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { loginUser, LoginPayload } from "../../lib/api";
+import { useAuth } from "../../context/AuthContext"; // ✅ import the context
 
 export default function Login() {
   const router = useRouter();
-  const [form, setForm] = useState<LoginPayload>({ email: '', password: '' });
+  const { login } = useAuth(); // ✅ get login function from context
+  const [form, setForm] = useState<LoginPayload>({ email: "", password: "" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleChange = (e: ChangeEvent<HTMLInputElement>) =>
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setError(null);
+
     try {
-      const { token, user } = await loginUser(form);
-      saveAuth(token, user);
-      router.push('/dashboard');
-    } catch {
-      alert('Login failed');
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+
+      const { token, user } = await loginUser(form, { signal: controller.signal });
+
+      clearTimeout(timeout);
+
+      // ✅ use context to store auth
+      login(user, token);
+
+      // ✅ redirect to dashboard
+      router.push("/dashboard");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      if (err.name === "AbortError") {
+        setError("Request timed out. Please try again.");
+      } else {
+        setError("Login failed. Please check your credentials.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="max-w-md mx-auto p-4">
       <h1 className="text-2xl mb-4">Login</h1>
+
+      {error && (
+        <div className="bg-red-100 text-red-700 p-2 rounded mb-2">
+          {error}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-3">
         <input
           type="email"
@@ -35,6 +65,7 @@ export default function Login() {
           onChange={handleChange}
           required
           className="w-full p-2 border rounded"
+          disabled={loading}
         />
         <input
           type="password"
@@ -44,9 +75,14 @@ export default function Login() {
           onChange={handleChange}
           required
           className="w-full p-2 border rounded"
+          disabled={loading}
         />
-        <button type="submit" className="w-full bg-green-600 text-white py-2 rounded">
-          Login
+        <button
+          type="submit"
+          className="w-full bg-green-600 text-white py-2 rounded cursor-pointer hover:bg-green-700 transition disabled:opacity-50"
+          disabled={loading}
+        >
+          {loading ? "Logging in..." : "Login"}
         </button>
       </form>
     </div>
