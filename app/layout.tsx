@@ -23,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${workSans.variable} ${workSans.variable} antialiased`}>
        <AuthProvider>
         <Providers>
-          <main className="p-6 bg-white dark:bg-gray-900">{children}</main>
+          <main className="p-3 bg-white dark:bg-gray-900">{children}</main>
         </Providers>
         </AuthProvider>
         <footer className="bg-gray-100 py-4 dark:bg-gray-800">

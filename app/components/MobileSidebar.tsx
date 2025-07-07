@@ -58,7 +58,7 @@ export default function MobileSidebar({ isOpen, onClose }: Props) {
     <aside
       className={`
         fixed top-0 left-0 h-screen w-64 bg-white dark:bg-gray-800 dark:text-white border-r shadow-lg z-50
-        transform transition-transform flex flex-col justify-between
+        transform transition-transform flex flex-col justify-between overflow-y-scroll
         ${isOpen ? "translate-x-0" : "-translate-x-full"}
       `}
     >

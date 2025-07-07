@@ -8,13 +8,13 @@ import {
 } from "lucide-react";
 import { useSession, signIn } from "next-auth/react";
 
-const API_KEY = process.env.GOOGLE_API_KEY!;
+const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
  
  /* const PICKER_CLIENT_ID = process.env.GOOGLE_CLIENT_ID; */
 
 if (!API_KEY) console.error("Missing GOOGLE_API_KEY");
  
- /* if (!PICKER_CLIENT_ID) console.error("Missing NEXT_PUBLIC_GOOGLE_CLIENT_ID"); */
+ /* if (!PICKER_CLIENT_ID) console.error("Missing GOOGLE_CLIENT_ID"); */
 
 declare global {
   interface Window {
@@ -372,7 +372,10 @@ export default function DocCentre() {
             </label>
 
              <button
-              onClick={openPicker}
+              onClick={ () => {
+                openPicker()
+                setShowModal(false);
+              }}
               className="flex items-center gap-2 border border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400 px-4 py-2 rounded hover:bg-blue-50 dark:hover:bg-blue-900/40"
             >
               <Cloud className="w-4 h-4" /> Connect Google Drive
