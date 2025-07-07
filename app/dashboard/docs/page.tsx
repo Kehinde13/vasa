@@ -8,11 +8,11 @@ import {
 } from "lucide-react";
 import { useSession, signIn } from "next-auth/react";
 
-const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY!;
+const API_KEY = process.env.GOOGLE_API_KEY!;
  
  /* const PICKER_CLIENT_ID = process.env.GOOGLE_CLIENT_ID; */
 
-if (!API_KEY) console.error("Missing NEXT_PUBLIC_GOOGLE_API_KEY");
+if (!API_KEY) console.error("Missing GOOGLE_API_KEY");
  
  /* if (!PICKER_CLIENT_ID) console.error("Missing NEXT_PUBLIC_GOOGLE_CLIENT_ID"); */
 
