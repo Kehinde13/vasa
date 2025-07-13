@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
 import { Plus, Trash2, Pencil } from "lucide-react";
 
 const STATUSES = ["active", "paused", "prospect", "ex-client"] as const;
@@ -15,29 +16,8 @@ type Client = {
   billing: string;
 };
 
-const dummyClients: Client[] = [
-  {
-    id: "1",
-    name: "Acme Corp",
-    email: "client@acme.com",
-    status: "active",
-    projects: "Landing page redesign, CRM integration",
-    preferences: "Weekly email, Zoom calls",
-    billing: "Monthly, due on 1st",
-  },
-  {
-    id: "2",
-    name: "Beta LLC",
-    email: "hello@beta.io",
-    status: "prospect",
-    projects: "Initial discovery phase",
-    preferences: "Slack communication",
-    billing: "Not yet defined",
-  },
-];
-
 export default function ClientTracker() {
-  const [clients, setClients] = useState<Client[]>(dummyClients);
+  const [clients, setClients] = useState<Client[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<Client, "id">>({
@@ -49,6 +29,28 @@ export default function ClientTracker() {
     billing: "",
   });
 
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+  useEffect(() => {
+    if (!token) return;
+
+    fetch("https://vasabackend.onrender.com/api/va-clients", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mapped = data.map((item: any) => ({
+          id: item._id,
+          ...item,
+        }));
+        setClients(mapped);
+      })
+      .catch((err) => console.error("Failed to load clients", err));
+  }, [token]);
+
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -57,33 +59,68 @@ export default function ClientTracker() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSave = () => {
-    if (!form.name || !form.email) return;
+  const handleSave = async () => {
+    if (!form.name || !form.email || !token) return;
 
-    if (editingId) {
-      setClients(
-        clients.map((c) =>
-          c.id === editingId ? { id: editingId, ...form } : c
-        )
-      );
-    } else {
-      setClients([{ id: crypto.randomUUID(), ...form }, ...clients]);
+    const payload = {
+      ...form,
+      status: form.status || "prospect",
+    };
+
+    try {
+      if (editingId) {
+        const res = await fetch(`https://vasabackend.onrender.com/api/va-clients/${editingId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        const updated = await res.json();
+        setClients(clients.map((c) => (c.id === editingId ? updated : c)));
+      } else {
+        const res = await fetch("https://vasabackend.onrender.com/api/va-clients", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        const newClient = await res.json();
+        setClients([{ id: newClient._id, ...newClient }, ...clients]);
+      }
+
+      setForm({
+        name: "",
+        email: "",
+        status: "active",
+        projects: "",
+        preferences: "",
+        billing: "",
+      });
+      setEditingId(null);
+      setShowModal(false);
+    } catch (err) {
+      console.error("Failed to save client:", err);
     }
-
-    setForm({
-      name: "",
-      email: "",
-      status: "active",
-      projects: "",
-      preferences: "",
-      billing: "",
-    });
-    setEditingId(null);
-    setShowModal(false);
   };
 
-  const deleteClient = (id: string) => {
-    setClients(clients.filter((c) => c.id !== id));
+  const deleteClient = async (id: string) => {
+    if (!token) return;
+
+    try {
+      await fetch(`https://vasabackend.onrender.com/api/va-clients/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      setClients(clients.filter((c) => c.id !== id));
+    } catch (err) {
+      console.error("Failed to delete client:", err);
+    }
   };
 
   const editClient = (client: Client) => {
@@ -99,9 +136,10 @@ export default function ClientTracker() {
     setShowModal(true);
   };
 
+  // UI remains unchanged
   return (
-    <div className=" py-6 px-4 space-y-8 dark:bg-neutral-900">
-      {/* Header */}
+    <div className="py-6 px-4 space-y-8 dark:bg-neutral-900">
+       {/* Header */}
       <div className="flex flex-wrap gap-3 justify-between items-center mb-6">
         <div className="flex items-center gap-2">
           <h1 className="text-xl sm:text-3xl font-bold text-neutral-800 dark:text-neutral-100">
@@ -193,9 +231,9 @@ export default function ClientTracker() {
 
       {/* Clients List */}
       <ul className="space-y-4">
-        {clients.map((client) => (
+        {clients.map((client, index) => (
           <li
-            key={client.id}
+            key={index}
             className="border rounded-lg p-4 shadow-sm bg-white dark:bg-neutral-800 dark:border-neutral-700 flex flex-col gap-2"
           >
             <div className="flex flex-wrap justify-between gap-2 items-center">
