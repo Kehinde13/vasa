@@ -33,6 +33,7 @@ export interface Invoice {
 
 
 export interface User {
+  id: string;
   fullName: string;
   email: string;
   businessName: string;
@@ -40,7 +41,7 @@ export interface User {
   phone: string;
   timeZone: string;
   businessType: string;
-  services: string[];
+  services: string[]; 
 }
 
 type BlockType = "task" | "meeting" | "focus";

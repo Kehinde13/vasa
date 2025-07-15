@@ -7,6 +7,7 @@ import {
   Eye, Pencil, Trash2, Download, Cloud
 } from "lucide-react";
 import { useSession, signIn } from "next-auth/react";
+import { useAuth } from "../../context/AuthContext";
 
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
  
@@ -35,6 +36,7 @@ type Doc = {
 
 export default function DocCentre() {
   const { data: session } = useSession();
+  const { user } = useAuth();
 
   const [docs, setDocs] = useState<Doc[]>([]);
   const [form, setForm] = useState<Doc>({
@@ -59,6 +61,7 @@ export default function DocCentre() {
   });
 
   const resetForm = () => setForm({ id: "", title: "", category: "", file: null, content: "" });
+
 
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   const handleChange = (e: any) => {
@@ -87,17 +90,66 @@ export default function DocCentre() {
     }
   };
 
-  const handleSave = () => {
-    if (!form.title || (!form.file && !form.content.trim())) return;
-    if (editingDocId) {
-      setDocs(docs.map(doc => doc.id === editingDocId ? { ...form, id: editingDocId } : doc));
-    } else {
-      setDocs([...docs, { ...form, id: crypto.randomUUID() }]);
+  const handleSave = async () => {
+  if (!form.title || (!form.file && !form.content.trim())) return;
+
+  if (editingDocId) {
+    // Local update only (no backend update for now)
+    setDocs(docs.map((doc) =>
+      doc.id === editingDocId ? { ...form, id: editingDocId } : doc
+    ));
+  } else {
+    if (!user?.id) return alert("User not authenticated");
+
+    try {
+      if (form.file) {
+        // Upload file + metadata via FormData
+        const formData = new FormData();
+        formData.append("title", form.title);
+        formData.append("category", form.category || "Uploaded");
+        formData.append("owner", user.id);
+        formData.append("type", "upload");
+        formData.append("content", form.content); // optional
+        formData.append("file", form.file);
+
+        const res = await fetch("https://vasabackend.onrender.com/api/documents", {
+          method: "POST",
+          body: formData,
+        });
+
+        const newDoc = await res.json();
+        setDocs((prev) => [...prev, newDoc]);
+      } else {
+        // Manual content (no file)
+        const payload = {
+          title: form.title,
+          category: form.category || "Manual",
+          owner: user.id,
+          content: form.content,
+          type: "manual",
+        };
+
+        const res = await fetch("https://vasabackend.onrender.com/api/documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const newDoc = await res.json();
+        setDocs((prev) => [...prev, newDoc]);
+      }
+    } catch (err) {
+      console.error("Failed to save document:", err);
+      alert("Error saving document");
     }
-    setShowModal(false);
-    setEditingDocId(null);
-    resetForm();
-  };
+  }
+
+  setShowModal(false);
+  setEditingDocId(null);
+  resetForm();
+};
+
+
 
   const handleEdit = (doc: Doc) => {
     setForm(doc);
@@ -123,66 +175,98 @@ export default function DocCentre() {
     document.body.appendChild(script);
   }, []);
 
-  const openPicker = () => {
+useEffect(() => {
+  const userId = user?.id;
+  if (!userId) return;
 
-    if (!session) {
-      return signIn("google");
+  (async () => {
+    try {
+      const res = await fetch(
+        `https://vasabackend.onrender.com/api/documents?owner=${userId}`
+      );
+      const data = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setDocs(data.map((d: any) => ({ ...d, id: d._id })));
+    } catch (err) {
+      console.error('Failed fetching docs', err);
     }
+  })();
+}, [user]);
 
-    if (!session?.accessToken || !window.google?.picker) return alert("Google Picker not loaded or session missing");
 
-    const view = new window.google.picker.DocsView()
-      .setIncludeFolders(true)
-      .setSelectFolderEnabled(true);
 
-    const picker = new window.google.picker.PickerBuilder()
-      .addView(view)
-      .setOAuthToken(session.accessToken)
-      .setDeveloperKey(API_KEY)
-      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-      .setCallback(async (data: any) => {
-        if (data.action === window.google.picker.Action.PICKED) {
-          const picked = data.docs[0];
-          const fileId = picked.id;
-          const fileName = picked.name;
+ const openPicker = () => {
+  if (!session) return signIn("google");
 
-          try {
-            const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+  if (!session?.accessToken || !window.google?.picker)
+    return alert("Google Picker not loaded or session missing");
+
+  const view = new window.google.picker.DocsView()
+    .setIncludeFolders(true)
+    .setSelectFolderEnabled(true);
+
+  const picker = new window.google.picker.PickerBuilder()
+    .addView(view)
+    .setOAuthToken(session.accessToken)
+    .setDeveloperKey(API_KEY)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .setCallback(async (data: any) => {
+      if (data.action === window.google.picker.Action.PICKED) {
+        const picked = data.docs[0];
+        const fileId = picked.id;
+        const fileName = picked.name;
+
+        try {
+          const response = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+            {
               headers: {
                 Authorization: `Bearer ${session.accessToken}`,
               },
-            });
-
-            const blob = await response.blob();
-            const file = new File([blob], fileName, { type: blob.type });
-
-            let content = "";
-            if (fileName.endsWith(".docx")) {
-              const arrayBuffer = await blob.arrayBuffer();
-              const result = await mammoth.convertToHtml({ arrayBuffer });
-              content = result.value;
             }
+          );
 
-            const newDoc: Doc = {
-              id: crypto.randomUUID(),
-              title: fileName,
-              category: "Google Drive",
-              file,
-              content,
-            };
+          const blob = await response.blob();
+          const file = new File([blob], fileName, { type: blob.type });
 
-            setDocs(prev => [...prev, newDoc]);
-            setPreviewDoc(newDoc);
-          } catch (err) {
-            console.error("Failed to download Google Drive file:", err);
-            alert("Unable to fetch the file from Google Drive.");
+          let content = "";
+          if (fileName.endsWith(".docx")) {
+            const arrayBuffer = await blob.arrayBuffer();
+            const result = await mammoth.convertToHtml({ arrayBuffer });
+            content = result.value;
           }
-        }
-      })
-      .build();
 
-    picker.setVisible(true);
-  };
+
+          if (!user?.id) return alert("User not authenticated");
+
+          // ✅ Upload to backend
+          const formData = new FormData();
+          formData.append("title", fileName);
+          formData.append("category", "Google Drive");
+          formData.append("owner", user.id);
+          formData.append("type", "upload");
+          formData.append("file", file);
+          formData.append("content", content);
+
+          const res = await fetch("https://vasabackend.onrender.com/api/documents", {
+            method: "POST",
+            body: formData,
+          });
+
+          const newDoc = await res.json();
+          setDocs((prev) => [...prev, newDoc]);
+          setPreviewDoc(newDoc);
+        } catch (err) {
+          console.error("Failed to download Google Drive file:", err);
+          alert("Unable to fetch the file from Google Drive.");
+        }
+      }
+    })
+    .build();
+
+  picker.setVisible(true);
+};
+
 
   useEffect(() => {
     if (previewDoc?.file && previewDoc.file.name.endsWith(".docx")) {
