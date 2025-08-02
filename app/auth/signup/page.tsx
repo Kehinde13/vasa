@@ -3,6 +3,7 @@ import { useState, ChangeEvent, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { registerUser, UserPayload } from '../../lib/api';
+import { toast } from 'react-toastify';
 
 export default function Signup() {
   const router = useRouter();
@@ -26,8 +27,9 @@ export default function Signup() {
     try {
       await registerUser(form);
       router.push('/auth/login');
+      toast.success('Registration successful! Please log in.');
     } catch {
-      alert('Signup failed');
+      toast.error('Signup failed');
     } finally {
       setLoading(false);
     }

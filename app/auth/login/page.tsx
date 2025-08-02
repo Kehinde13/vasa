@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loginUser, LoginPayload } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
+import { toast } from "react-toastify";
 
 export default function Login() {
   const router = useRouter();
@@ -33,12 +34,15 @@ export default function Login() {
 
       login(user, token);
       router.push("/dashboard");
+      toast.success("Login successful!");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "AbortError") {
         setError("Request timed out. Please try again.");
+        toast.error("Request timed out. Please try again.");
       } else {
         setError("Login failed. Please check your credentials.");
+        toast.error("Login failed. Please check your credentials.");
       }
     } finally {
       setLoading(false);

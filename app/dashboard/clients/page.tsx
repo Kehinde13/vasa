@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Plus, Trash2, Pencil } from "lucide-react";
+import { toast } from "react-toastify";
 
 const STATUSES = ["active", "paused", "prospect", "ex-client"] as const;
 type Status = typeof STATUSES[number];
@@ -102,8 +103,9 @@ export default function ClientTracker() {
       });
       setEditingId(null);
       setShowModal(false);
-    } catch (err) {
-      console.error("Failed to save client:", err);
+      toast.success("Client saved successfully!");
+    } catch  {
+      toast.error("Failed to save client:");
     }
   };
 
@@ -118,8 +120,9 @@ export default function ClientTracker() {
         },
       });
       setClients(clients.filter((c) => c.id !== id));
-    } catch (err) {
-      console.error("Failed to delete client:", err);
+      toast.success("Client deleted successfully!");
+    } catch {
+      toast.error("Failed to delete client");
     }
   };
 

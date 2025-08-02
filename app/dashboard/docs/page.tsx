@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useSession, signIn } from "next-auth/react";
 import { useAuth } from "../../context/AuthContext";
+import { toast } from "react-toastify";
 
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
  
@@ -137,10 +138,11 @@ export default function DocCentre() {
 
         const newDoc = await res.json();
         setDocs((prev) => [...prev, newDoc]);
+        toast.success("Document saved successfully");
       }
     } catch (err) {
       console.error("Failed to save document:", err);
-      alert("Error saving document");
+      toast.error("Error saving document");
     }
   }
 
@@ -159,6 +161,7 @@ export default function DocCentre() {
 
   const handleDelete = (id: string) => {
     setDocs(docs.filter(doc => doc.id !== id));
+    toast.error("Document deleted successfully");
   };
 
   const getFileIcon = (fileName: string) => {
@@ -455,15 +458,26 @@ useEffect(() => {
               />
             </label>
 
-             <button
-              onClick={ () => {
-                openPicker()
-                setShowModal(false);
-              }}
-              className="flex items-center gap-2 border border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400 px-4 py-2 rounded hover:bg-blue-50 dark:hover:bg-blue-900/40"
-            >
-              <Cloud className="w-4 h-4" /> Connect Google Drive
-            </button>
+             {session?.accessToken ? (
+                <button
+                  onClick={() => {
+                    openPicker();
+                    toast.success("Google Drive connected!");
+                    setShowModal(false);
+                  }}
+                  className="flex items-center gap-2 border border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400 px-4 py-2 rounded hover:bg-blue-50 dark:hover:bg-blue-900/40"
+                >
+                  <Cloud className="w-4 h-4" /> Import from Google Drive
+                </button>
+              ) : (
+                <button
+                  onClick={() => signIn("google")}
+                  className="flex items-center gap-2 border border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400 px-4 py-2 rounded hover:bg-blue-50 dark:hover:bg-blue-900/40"
+                >
+                  <Cloud className="w-4 h-4" /> Connect Google Drive
+                </button>
+              )}
+
 
 
             {form.file && (

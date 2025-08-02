@@ -10,6 +10,7 @@ import {
 import { useRouter } from "next/navigation";
 import { User } from "../types";
 import { signOut } from "next-auth/react";
+import { toast } from "react-toastify";
 
 type AuthContextType = {
   user: User | null;
@@ -34,7 +35,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("token", token);
     router.push("/dashboard");
     setUser(user);
-    console.log("User logged in:", user);
   };
 
   
@@ -42,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 const logout = () => {
   localStorage.removeItem("user");
   localStorage.removeItem("token");
+  toast.error("Logged out");
 
   // Optional: Disconnect the Google session in browser
   const auth2 = window.gapi?.auth2?.getAuthInstance();

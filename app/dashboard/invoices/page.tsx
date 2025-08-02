@@ -1,175 +1,311 @@
 "use client";
-import { useState } from "react";
-import { format, isBefore, parseISO } from "date-fns";
-import { Plus, X } from "lucide-react";
-import jsPDF from "jspdf";
 
-type Recurrence = "none" | "weekly" | "monthly" | "quarterly";
-type InvoiceStatus = "sent" | "paid" | "overdue";
+import React, { useState, useEffect } from "react";
+import { toast } from "react-toastify";
 
 interface Invoice {
-  id: string;
+  _id: string;
   client: string;
   amount: number;
   dueDate: string;
-  isPaid: boolean;
-  recurrence: Recurrence;
+  recurrence: string;
+  isPaid?: boolean;
 }
 
-export default function InvoiceTracker() {
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+interface FormValues {
+  client: string;
+  amount: number;
+  dueDate: string;
+  recurrence: "none" | "weekly" | "monthly" | "quarterly";
+}
 
-  const [form, setForm] = useState({
+export default function InvoicesPage() {
+  const [form, setForm] = useState<FormValues>({
     client: "",
-    amount: "",
+    amount: 0,
     dueDate: "",
-    recurrence: "none" as Recurrence,
+    recurrence: "none",
   });
 
-  const handleInput = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [fetching, setFetching] = useState(true);
+
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      [name]: name === "amount" ? parseFloat(value) : value,
+    }));
   };
 
-  const addInvoice = () => {
-    if (!form.client || !form.amount || !form.dueDate) return;
-    const newInvoice: Invoice = {
-      id: crypto.randomUUID(),
-      client: form.client,
-      amount: parseFloat(form.amount),
-      dueDate: form.dueDate,
-      isPaid: false,
-      recurrence: form.recurrence,
-    };
-    setInvoices([...invoices, newInvoice]);
-    setForm({ client: "", amount: "", dueDate: "", recurrence: "none" });
-    setModalOpen(false);
+  const fetchInvoices = async () => {
+    if (!token) return;
+    setFetching(true);
+
+    try {
+      const res = await fetch(`https://vasabackend.onrender.com/api/invoices`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || "Failed to fetch invoices");
+
+      setInvoices(data);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      toast.error(err.message || "Error loading invoices");
+    } finally {
+      setFetching(false);
+    }
   };
 
-  const getStatus = (inv: Invoice): InvoiceStatus => {
-    if (inv.isPaid) return "paid";
-    const today = new Date();
-    const due = parseISO(inv.dueDate);
-    return isBefore(due, today) ? "overdue" : "sent";
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const url = editingId
+        ? `https://vasabackend.onrender.com/api/invoices/${editingId}`
+        : "https://vasabackend.onrender.com/api/invoices";
+
+      const method = editingId ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(form),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error saving invoice");
+
+      toast.success(editingId ? "Invoice updated!" : "Invoice created!");
+      setForm({ client: "", amount: 0, dueDate: "", recurrence: "none" });
+      setEditingId(null);
+      fetchInvoices();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      toast.error(err.message || "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const togglePaid = (id: string) => {
-    setInvoices((prev) =>
-      prev.map((inv) => (inv.id === id ? { ...inv, isPaid: !inv.isPaid } : inv))
-    );
+  const handleEdit = (invoice: Invoice) => {
+    setForm({
+      client: invoice.client,
+      amount: invoice.amount,
+      dueDate: invoice.dueDate.slice(0, 10),
+      recurrence: invoice.recurrence as FormValues["recurrence"],
+    });
+    setEditingId(invoice._id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const exportInvoicePDF = (invoice: Invoice) => {
-    const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text("Invoice", 20, 20);
-    doc.setFontSize(12);
-    doc.text(`Client: ${invoice.client}`, 20, 40);
-    doc.text(`Amount: $${invoice.amount.toFixed(2)}`, 20, 50);
-    doc.text(`Due Date: ${invoice.dueDate}`, 20, 60);
-    doc.text(`Status: ${getStatus(invoice).toUpperCase()}`, 20, 70);
-    doc.text(`Recurrence: ${invoice.recurrence}`, 20, 80);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 90);
-    doc.save(`invoice-${invoice.client}.pdf`);
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Delete this invoice?")) return;
+
+    try {
+      const res = await fetch(
+        `https://vasabackend.onrender.com/api/invoices/${id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete");
+
+      toast.success("Invoice deleted");
+      fetchInvoices();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      toast.error(err.message || "Error deleting invoice");
+    }
   };
 
-  const statusStyle = (status: InvoiceStatus) =>
-    status === "paid"
-      ? "bg-green-100 text-green-800"
-      : status === "overdue"
-      ? "bg-red-100 text-red-800"
-      : "bg-yellow-100 text-yellow-800";
+  useEffect(() => {
+    if (token) fetchInvoices();
+  }, [token]);
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">🧾 Invoice Tracker</h1>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4" /> Add Invoice
-        </button>
-      </div>
+    <section className="max-w-3xl mx-auto py-8 px-6">
+      <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white tracking-tight">
+        {editingId ? "Edit Invoice" : "Create New Invoice"}
+      </h2>
 
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-        {invoices.map((inv) => {
-          const status = getStatus(inv);
-          return (
-            <div
-              key={inv.id}
-              onClick={() => {
-                setSelectedInvoice(inv);
-                setDetailOpen(true);
-              }}
-              className="border rounded p-4 bg-white shadow hover:shadow-md cursor-pointer"
-            >
-              <h3 className="font-bold">{inv.client}</h3>
-              <p className="text-sm text-gray-600">${inv.amount.toFixed(2)}</p>
-              <p className="text-xs text-gray-500">Due: {format(parseISO(inv.dueDate), "MMM d, yyyy")}</p>
-              <span className={`text-xs px-2 py-1 mt-2 inline-block rounded ${statusStyle(status)}`}>
-                {status.toUpperCase()}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Add Invoice Modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex justify-center items-center">
-          <div className="bg-white p-6 rounded-lg w-full max-w-md space-y-4">
-            <h2 className="text-lg font-semibold">Add Invoice</h2>
-            <input name="client" value={form.client} onChange={handleInput} placeholder="Client Name" className="border px-3 py-2 rounded w-full" />
-            <input name="amount" value={form.amount} onChange={handleInput} placeholder="Amount" type="number" className="border px-3 py-2 rounded w-full" />
-            <input name="dueDate" value={form.dueDate} onChange={handleInput} type="date" className="border px-3 py-2 rounded w-full" />
-            <select name="recurrence" value={form.recurrence} onChange={handleInput} className="border px-3 py-2 rounded w-full">
-              <option value="none">One-time</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-              <option value="quarterly">Quarterly</option>
-            </select>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setModalOpen(false)} className="text-gray-500">Cancel</button>
-              <button onClick={addInvoice} className="bg-blue-600 text-white px-4 py-2 rounded">Add</button>
-            </div>
-          </div>
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-6 bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md transition-all"
+      >
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Client Name
+          </label>
+          <input
+            name="client"
+            value={form.client}
+            onChange={handleChange}
+            placeholder="e.g., John Doe"
+            required
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
         </div>
-      )}
 
-      {/* Invoice Detail Modal */}
-      {detailOpen && selectedInvoice && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex justify-center items-center">
-          <div className="bg-white p-6 rounded-lg w-full max-w-md space-y-3">
-            <div className="flex justify-between items-center mb-2">
-              <h2 className="text-lg font-semibold">Invoice Details</h2>
-              <button onClick={() => setDetailOpen(false)}><X className="w-5 h-5" /></button>
-            </div>
-            <p><strong>Client:</strong> {selectedInvoice.client}</p>
-            <p><strong>Amount:</strong> ${selectedInvoice.amount.toFixed(2)}</p>
-            <p><strong>Due:</strong> {format(parseISO(selectedInvoice.dueDate), "PPPP")}</p>
-            <p><strong>Status:</strong> {getStatus(selectedInvoice)}</p>
-            <p><strong>Recurs:</strong> {selectedInvoice.recurrence}</p>
-            <button
-              onClick={() => exportInvoicePDF(selectedInvoice)}
-              className="mt-4 text-sm underline text-blue-600"
-            >
-              Download PDF
-            </button>
-            <button
-              onClick={() => {
-                if (selectedInvoice) togglePaid(selectedInvoice.id);
-                setDetailOpen(false);
-              }}
-              className="text-sm m-2 underline text-green-600"
-            >
-              Mark as {selectedInvoice.isPaid ? "Unpaid" : "Paid"}
-            </button>
-          </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Amount (₦)
+          </label>
+          <input
+            name="amount"
+            type="number"
+            value={form.amount}
+            onChange={handleChange}
+            required
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
         </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Due Date
+          </label>
+          <input
+            name="dueDate"
+            type="date"
+            value={form.dueDate}
+            onChange={handleChange}
+            required
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Recurrence
+          </label>
+          <select
+            name="recurrence"
+            value={form.recurrence}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="none">None</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly</option>
+          </select>
+        </div>
+
+        <div className="flex items-center gap-4 mt-6">
+          <button
+            type="submit"
+            disabled={loading}
+            className="bg-blue-600 hover:bg-blue-700 transition text-white px-6 py-2 rounded-md font-medium disabled:opacity-50"
+          >
+            {loading
+              ? "Saving..."
+              : editingId
+              ? "Update Invoice"
+              : "Create Invoice"}
+          </button>
+
+          {editingId && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditingId(null);
+                setForm({
+                  client: "",
+                  amount: 0,
+                  dueDate: "",
+                  recurrence: "none",
+                });
+              }}
+              className="px-6 py-2 bg-gray-300 dark:bg-gray-600 text-black dark:text-white rounded-md hover:bg-gray-400 dark:hover:bg-gray-500 transition"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      </form>
+
+      <hr className="my-10 border-gray-300 dark:border-gray-600" />
+
+      <h3 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">
+        Your Invoices
+      </h3>
+
+      {fetching ? (
+        <p className="text-gray-600 dark:text-gray-400">Loading invoices...</p>
+      ) : invoices.length === 0 ? (
+        <p className="text-gray-500 dark:text-gray-400">No invoices found.</p>
+      ) : (
+        <ul className="space-y-4">
+          {invoices.map((invoice) => (
+            <li
+              key={invoice._id}
+              className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 shadow-sm hover:shadow-md transition-all"
+            >
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {invoice.client}
+                </h4>
+                <span
+                  className={`px-3 py-1 text-sm font-medium rounded-full ${
+                    invoice.isPaid
+                      ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                      : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+                  }`}
+                >
+                  {invoice.isPaid ? "Paid" : "Unpaid"}
+                </span>
+              </div>
+              <p className="text-gray-700 dark:text-gray-300">
+                <strong>Amount:</strong> ₦{invoice.amount.toLocaleString()}
+              </p>
+              <p className="text-gray-700 dark:text-gray-300">
+                <strong>Due:</strong>{" "}
+                {new Date(invoice.dueDate).toLocaleDateString()}
+              </p>
+              <p className="text-gray-700 dark:text-gray-300">
+                <strong>Recurrence:</strong> {invoice.recurrence}
+              </p>
+
+              <div className="flex gap-6 mt-4">
+                <button
+                  onClick={() => handleEdit(invoice)}
+                  className="text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => handleDelete(invoice._id)}
+                  className="text-red-600 hover:underline dark:text-red-400"
+                >
+                  Delete
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
-    </div>
+    </section>
   );
 }

@@ -3,6 +3,9 @@ import { Work_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "./context/AuthContext";
 import { Providers } from "./provider";
+import { Toaster } from "react-hot-toast";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 
 
@@ -24,6 +27,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
        <AuthProvider>
         <Providers>
           <main className="p-3 bg-white dark:bg-gray-900">{children}</main>
+          <ToastContainer />
+          <Toaster position="top-right" />
         </Providers>
         </AuthProvider>
         <footer className="bg-gray-100 py-4 dark:bg-gray-800">
