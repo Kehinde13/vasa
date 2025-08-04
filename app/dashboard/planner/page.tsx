@@ -1,11 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Trash2, Pencil } from "lucide-react";
-import { signIn, useSession } from "next-auth/react";
 import { TimeBlock } from "@/app/types";
 
 const hours = Array.from({ length: 15 }, (_, i) => 7 + i); // 7 AM to 9 PM
 const minutesOptions = [0, 15, 30, 45];
+const base = "https://vasabackend.onrender.com/api";
 
 const getFormattedDate = (offset: number) => {
   const d = new Date();
@@ -23,25 +23,60 @@ export default function DailyPlanner() {
   const [selectedDate, setSelectedDate] = useState(days[0]);
   const [blocksMap, setBlocksMap] = useState<Record<string, TimeBlock[]>>({});
   const [showModal, setShowModal] = useState(false);
-  const [modalData, setModalData] = useState({
+  const [modalData, setModalData] = useState<TimeBlock & { editing?: boolean; _id?: string }>({
     startHour: 7,
     startMinute: 0,
     endHour: 8,
     endMinute: 0,
     title: "",
-    type: "task" as "task" | "meeting" | "focus",
+    type: "task",
     id: "",
     editing: false,
   });
   const [errorMsg, setErrorMsg] = useState("");
-  const { data: session } = useSession();
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-  const openModal = (block?: TimeBlock) => {
+  /** Load blocks for selected day from backend */
+  const loadBlocks = async (date: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${base}/daily-plans?date=${date}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const events = (data.events || []).map((e: any) => {
+          const [startHour, startMinute] = e.timeBlock.start.split(":").map(Number);
+          const [endHour, endMinute] = e.timeBlock.end.split(":").map(Number);
+          return {
+            id: crypto.randomUUID(),
+            _id: e._id, // backend ID for updates
+            title: e.title,
+            type: e.type.toLowerCase(),
+            startHour,
+            startMinute,
+            endHour,
+            endMinute,
+          } as TimeBlock & { _id: string };
+        });
+        setBlocksMap((prev) => ({ ...prev, [date]: events }));
+      }
+    } catch (err) {
+      console.error("Failed to load blocks:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadBlocks(selectedDate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
+
+  const openModal = (block?: TimeBlock & { _id?: string }) => {
     setErrorMsg("");
     setShowModal(true);
-    if (block) {
-      setModalData({ ...block, editing: true });
-    } else {
+    if (block) setModalData({ ...block, editing: true });
+    else
       setModalData({
         startHour: 7,
         startMinute: 0,
@@ -52,77 +87,77 @@ export default function DailyPlanner() {
         id: "",
         editing: false,
       });
-    }
   };
 
-  const createGoogleEvent = async (block: TimeBlock) => {
-    if (!session?.accessToken) return;
-
-    const start = new Date(selectedDate);
-    start.setHours(block.startHour, block.startMinute);
-
-    const end = new Date(selectedDate);
-    end.setHours(block.endHour, block.endMinute);
-
-    try {
-      await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          summary: block.title,
-          description: `VAsA Planner - ${block.type}`,
-          start: { dateTime: start.toISOString() },
-          end: { dateTime: end.toISOString() },
-        }),
-      });
-    } catch (err) {
-      console.error("Failed to create Google Calendar event:", err);
-    }
-  };
-
+  /** Save or update a block */
   const saveBlock = async () => {
-    const { startHour, startMinute, endHour, endMinute, id, editing } = modalData;
-    const start = new Date();
-    start.setHours(startHour, startMinute);
-    const end = new Date();
-    end.setHours(endHour, endMinute);
-
-    if (end <= start) {
-      setErrorMsg("End time must be after start time.");
-      return;
-    }
+    const { startHour, startMinute, endHour, endMinute, id, editing, _id } = modalData;
+    const start = new Date(); start.setHours(startHour, startMinute);
+    const end = new Date(); end.setHours(endHour, endMinute);
+    if (end <= start) return setErrorMsg("End time must be after start time.");
 
     const blocks = blocksMap[selectedDate] || [];
     const overlap = blocks.some((b) => {
       if (editing && b.id === id) return false;
-      const bStart = new Date();
-      bStart.setHours(b.startHour, b.startMinute);
-      const bEnd = new Date();
-      bEnd.setHours(b.endHour, b.endMinute);
+      const bStart = new Date(); bStart.setHours(b.startHour, b.startMinute);
+      const bEnd = new Date(); bEnd.setHours(b.endHour, b.endMinute);
       return start < bEnd && end > bStart;
     });
+    if (overlap) return setErrorMsg("This time overlaps with an existing block.");
 
-    if (overlap) {
-      setErrorMsg("This time overlaps with an existing block.");
-      return;
-    }
+    // Prepare local block
+    const newBlock: TimeBlock & { _id?: string } = editing
+      ? { ...modalData }
+      : { ...modalData, id: crypto.randomUUID() };
 
-    const updated = editing
-      ? blocks.map((b) => (b.id === id ? { ...modalData } : b))
-      : [...blocks, { ...modalData, id: crypto.randomUUID() }];
-
-    setBlocksMap({ ...blocksMap, [selectedDate]: updated });
+    // Update UI first
+    const updatedBlocks = editing
+      ? blocks.map((b) => (b.id === id ? newBlock : b))
+      : [...blocks, newBlock];
+    setBlocksMap({ ...blocksMap, [selectedDate]: updatedBlocks });
     setShowModal(false);
 
-    if (!editing) await createGoogleEvent(modalData);
+    // Persist to backend
+    try {
+      const res = await fetch(`${base}/daily-plans/upsert-block`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          date: selectedDate,
+          editingId: editing ? _id : null,
+          block: {
+            title: modalData.title,
+            type: modalData.type.charAt(0).toUpperCase() + modalData.type.slice(1),
+            timeBlock: {
+              start: `${modalData.startHour}:${modalData.startMinute.toString().padStart(2, "0")}`,
+              end: `${modalData.endHour}:${modalData.endMinute.toString().padStart(2, "0")}`,
+            },
+          },
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to save block");
+      await loadBlocks(selectedDate); // refresh to get correct _ids
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Failed to save block to server.");
+    }
   };
 
-  const deleteBlock = (id: string) => {
-    const filtered = (blocksMap[selectedDate] || []).filter((b) => b.id !== id);
+  /** Delete block */
+  const deleteBlock = async (block: TimeBlock & { _id?: string }) => {
+    const filtered = (blocksMap[selectedDate] || []).filter((b) => b.id !== block.id);
     setBlocksMap({ ...blocksMap, [selectedDate]: filtered });
+
+    try {
+      await fetch(`${base}/daily-plans/delete-block`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ date: selectedDate, blockId: block._id }),
+      });
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const formatTime = (h: number, m: number) => {
@@ -134,14 +169,6 @@ export default function DailyPlanner() {
 
   return (
     <div className="p-4 mx-auto space-y-6 text-gray-900 dark:text-gray-100">
-      <div className="flex justify-between items-center">
-        {!session ? (
-          <button onClick={() => signIn("google")}>Connect Google Calendar</button>
-        ) : (
-          <p>Connected as {session.user?.email}</p>
-        )}
-      </div>
-
       <div className="flex gap-2 flex-wrap pb-2">
         {days.map((d) => (
           <button
@@ -185,7 +212,7 @@ export default function DailyPlanner() {
                   </span>
                   <div className="flex gap-2">
                     <Pencil onClick={() => openModal(block)} className="w-4 h-4 cursor-pointer" />
-                    <Trash2 onClick={() => deleteBlock(block.id)} className="w-4 h-4 cursor-pointer" />
+                    <Trash2 onClick={() => deleteBlock(block)} className="w-4 h-4 cursor-pointer" />
                   </div>
                 </div>
               ))}

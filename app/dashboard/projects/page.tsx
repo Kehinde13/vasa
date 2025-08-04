@@ -72,7 +72,8 @@ export default function ProjectBoard() {
         const [tData, cData] = await Promise.all([tRes.json(), cRes.json()]);
         setClients(cData);
         setTasks(
-          tData.map((p) => ({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          tData.map((p: any) => ({
             id: p._id,
             title: p.title,
             description: p.description,
@@ -85,13 +86,14 @@ export default function ProjectBoard() {
             subtasks: p.tags || [],
           }))
         );
-      } catch (e: any) {
-        toast.error(e.message);
+      } catch  {
+        toast.error("Failed to load");
       } finally {
         setFetching(false);
       }
     };
     load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtered = tasks
@@ -144,7 +146,8 @@ export default function ProjectBoard() {
       const res = await fetch(`${base}/projects`, { headers });
       const tData = await res.json();
       setTasks(
-        tData.map((p) => ({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        tData.map((p: any) => ({
           id: p._id,
           title: p.title,
           description: p.description,
@@ -158,8 +161,8 @@ export default function ProjectBoard() {
       );
       setShowForm(false);
       setEditingId(null);
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch {
+      toast.error("Failed to save");
     } finally {
       setLoading(false);
     }
