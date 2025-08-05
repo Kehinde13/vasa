@@ -42,6 +42,7 @@ export interface User {
   timeZone: string;
   businessType: string;
   services: string[]; 
+  profileImage: string;
 }
 
 type BlockType = "task" | "meeting" | "focus";

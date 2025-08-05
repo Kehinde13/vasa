@@ -25,40 +25,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const router = useRouter();
 
+  // ✅ Load user safely on mount
   useEffect(() => {
     const stored = localStorage.getItem("user");
-    if (stored) setUser(JSON.parse(stored));
+    if (!stored || stored === "undefined" || stored === "null") {
+      localStorage.removeItem("user"); // clear corrupted value
+      return;
+    }
+
+    try {
+      const parsed: User = JSON.parse(stored);
+      setUser(parsed);
+    } catch (err) {
+      console.error("Failed to parse stored user", err);
+      localStorage.removeItem("user");
+    }
   }, []);
 
+  // ✅ Safe login
   const login = (user: User, token: string) => {
+    if (!user) return; // extra guard
     localStorage.setItem("user", JSON.stringify(user));
     localStorage.setItem("token", token);
-    router.push("/dashboard");
     setUser(user);
+    router.push("/dashboard");
   };
 
-  
+  // ✅ Safe logout
+  const logout = () => {
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    setUser(null);
 
-const logout = () => {
-  localStorage.removeItem("user");
-  localStorage.removeItem("token");
-  toast.error("Logged out");
+    toast.error("Logged out");
 
-  // Optional: Disconnect the Google session in browser
-  const auth2 = window.gapi?.auth2?.getAuthInstance();
-  if (auth2) {
-    auth2.signOut().then(() => {
-      console.log("Google session disconnected");
-    });
-  }
+    // Optional: Disconnect Google session
+    /* const auth2 = (window as any).gapi?.auth2?.getAuthInstance();
+    if (auth2) {
+      auth2.signOut().then(() => console.log("Google session disconnected"));
+    } */
 
-  // Remove user from app context
-  setUser(null);
-
-  // Sign out of NextAuth and redirect
-  signOut({ callbackUrl: "/auth/login" });
-};
-
+    // Sign out of NextAuth and redirect
+    signOut({ callbackUrl: "/auth/login" });
+  };
 
   return (
     <AuthContext.Provider value={{ user, setUser, login, logout }}>

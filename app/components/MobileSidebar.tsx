@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { X } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { DarkModeToggle} from "./DarkmodeToggle";
+import { DarkModeToggle } from "./DarkmodeToggle";
+import Image from "next/image";
 import {
   FaHome,
   FaInbox,
@@ -28,6 +29,9 @@ export default function MobileSidebar({ isOpen, onClose }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const { logout, user } = useAuth();
+
+  const base = "https://vasabackend.onrender.com"; // for profile image
+  const profileImageUrl = user?.profileImage ? `${base}${user.profileImage}` : null;
 
   const handleLogout = () => {
     logout();
@@ -56,19 +60,40 @@ export default function MobileSidebar({ isOpen, onClose }: Props) {
 
   return (
     <aside
-      className={`
-        fixed top-0 left-0 h-screen w-64 bg-white dark:bg-gray-800 dark:text-white border-r shadow-lg z-50
+      className={`fixed top-0 left-0 h-screen w-64 bg-white dark:bg-gray-800 dark:text-white border-r shadow-lg z-50
         transform transition-transform flex flex-col justify-between overflow-y-scroll pb-5
-        ${isOpen ? "translate-x-0" : "-translate-x-full"}
-      `}
+        ${isOpen ? "translate-x-0" : "-translate-x-full"}`}
     >
       <div>
+        {/* User Info */}
         <div className="p-6 flex justify-between items-center border-b">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-700">
-              {typeof user?.fullName === "string" && user.fullName.length > 0
-                ? user.fullName[0].toUpperCase()
-                : "U"}
+            <div className="relative w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-700">
+              {profileImageUrl ? (
+                <Image
+                  src={profileImageUrl}
+                  alt={user?.fullName || "User"}
+                  width={32}
+                  height={32}
+                  className="object-cover w-full h-full"
+                  onError={(e) => {
+                    // fallback to text avatar if image fails
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = "none";
+                    target.parentElement!.innerHTML = `${
+                      typeof user?.fullName === "string" && user.fullName.length > 0
+                        ? user.fullName[0].toUpperCase()
+                        : "U"
+                    }`;
+                  }}
+                />
+              ) : (
+                <>
+                  {typeof user?.fullName === "string" && user.fullName.length > 0
+                    ? user.fullName[0].toUpperCase()
+                    : "U"}
+                </>
+              )}
             </div>
             <span className="text-base font-semibold">
               {user?.fullName || "User"}
@@ -78,6 +103,8 @@ export default function MobileSidebar({ isOpen, onClose }: Props) {
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Navigation */}
         <nav className="flex flex-col gap-4 p-4 text-sm">
           <div className="flex flex-col gap-1">
             {homeLinks.map(({ href, label, icon }) => (
@@ -85,17 +112,16 @@ export default function MobileSidebar({ isOpen, onClose }: Props) {
                 key={href}
                 href={href}
                 onClick={onClose}
-                className={`
-                  flex items-center gap-2 px-3 py-2 rounded transition-colors
+                className={`flex items-center gap-2 px-3 py-2 rounded transition-colors
                   hover:bg-gray-200 dark:hover:bg-gray-700
-                  ${pathname === href ? "bg-gray-300 dark:bg-gray-700 font-semibold" : ""}
-                `}
+                  ${pathname === href ? "bg-gray-300 dark:bg-gray-700 font-semibold" : ""}`}
               >
                 {icon}
                 {label}
               </Link>
             ))}
           </div>
+
           <div className="flex flex-col gap-1 mt-4">
             <div className="flex items-center gap-2 text-gray-500 font-semibold mb-1 text-xs uppercase tracking-wide">
               <FaToolbox />
@@ -106,28 +132,25 @@ export default function MobileSidebar({ isOpen, onClose }: Props) {
                 key={href}
                 href={href}
                 onClick={onClose}
-                className={`
-                  flex items-center gap-2 px-3 py-2 rounded transition-colors
+                className={`flex items-center gap-2 px-3 py-2 rounded transition-colors
                   hover:bg-gray-200 dark:hover:bg-gray-700
-                  ${pathname === href ? "bg-gray-300 dark:bg-gray-700 font-semibold" : ""}
-                `}
+                  ${pathname === href ? "bg-gray-300 dark:bg-gray-700 font-semibold" : ""}`}
               >
                 {icon}
                 {label}
               </Link>
             ))}
           </div>
+
           <div className="flex flex-col gap-1 mt-4 border-t pt-4">
             {settingsLinks.map(({ href, label, icon }) => (
               <Link
                 key={href}
                 href={href}
                 onClick={onClose}
-                className={`
-                  flex items-center gap-2 px-3 py-2 rounded transition-colors
+                className={`flex items-center gap-2 px-3 py-2 rounded transition-colors
                   hover:bg-gray-200 dark:hover:bg-gray-700
-                  ${pathname === href ? "bg-gray-300 dark:bg-gray-700 font-semibold" : ""}
-                `}
+                  ${pathname === href ? "bg-gray-300 dark:bg-gray-700 font-semibold" : ""}`}
               >
                 {icon}
                 {label}
@@ -137,11 +160,12 @@ export default function MobileSidebar({ isOpen, onClose }: Props) {
         </nav>
       </div>
 
+      {/* Footer */}
       <div className="p-4 border-t">
         <DarkModeToggle />
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-2 text-left text-sm text-red-600 hover:underline"
+          className="w-full flex items-center gap-2 text-left text-sm text-red-600 hover:underline mt-2"
         >
           <FaSignOutAlt />
           Logout
