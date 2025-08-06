@@ -22,14 +22,15 @@ interface Task {
   priority: Priority;
   status: Status;
   client: string; // client _id
-  clientName: string; // ✅ actual name for display
+  clientName: string; 
   subtasks: string[];
 }
 
 interface Client {
   _id: string;
-  name: string;
+  name: string; 
 }
+
 
 export default function ProjectBoard() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -82,7 +83,7 @@ export default function ProjectBoard() {
             priority: p.priority,
             status: p.status,
             client: p.client?._id || "",
-            clientName: p.client?.name || "",
+            clientName: p.clientName || p.client?.fullName || "Unknown Client",
             subtasks: p.tags || [],
           }))
         );
@@ -122,51 +123,79 @@ export default function ProjectBoard() {
     }
   };
 
-  const handleSave = async () => {
-    if (!form.title || !form.client)
-      return toast.error("Title & client required");
-    setLoading(true);
-    try {
-      const method = editingId ? "PUT" : "POST";
-      const url = editingId
-        ? `${base}/projects/${editingId}`
-        : `${base}/projects`;
-      const body = {
-        title: form.title,
-        description: form.description,
-        dueDate: form.endDate,
-        priority: form.priority,
-        status: form.status,
-        tags: form.subtasks,
-        client: form.client,
-      };
-      await fetch(url, { method, headers, body: JSON.stringify(body) });
-      toast.success(editingId ? "Task updated" : "Task created");
+ const handleSave = async () => {
+  if (!form.title || !form.client)
+    return toast.error("Title & client required");
 
-      const res = await fetch(`${base}/projects`, { headers });
-      const tData = await res.json();
-      setTasks(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        tData.map((p: any) => ({
-          id: p._id,
-          title: p.title,
-          description: p.description,
-          startDate: p.createdAt?.slice(0, 10),
-          endDate: p.dueDate?.slice(0, 10) || "",
-          priority: p.priority,
-          status: p.status,
-          client: p.client?._id || "",
-          subtasks: p.tags || [],
-        }))
-      );
-      setShowForm(false);
-      setEditingId(null);
-    } catch {
-      toast.error("Failed to save");
-    } finally {
-      setLoading(false);
+  setLoading(true);
+
+  try {
+    const method = editingId ? "PUT" : "POST";
+    const url = editingId
+      ? `${base}/projects/${editingId}`
+      : `${base}/projects`;
+
+    const body = {
+      title: form.title,
+      description: form.description,
+      dueDate: form.endDate,
+      priority: form.priority,
+      status: form.status,
+      tags: form.subtasks,
+      client: form.client,
+    };
+    // 🔹 1. Save or update the project
+    const saveRes = await fetch(url, {
+      method,
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    if (!saveRes.ok) {
+      const errData = await saveRes.json().catch(() => ({}));
+      throw new Error(errData.error || "Failed to save project");
     }
-  };
+
+    toast.success(editingId ? "Task updated" : "Task created");
+
+    // 🔹 2. Reload all projects (GET)
+    const listRes = await fetch(`${base}/projects`, {
+      headers: { Authorization: `Bearer ${token}` }, // no Content-Type for GET
+    });
+
+    if (!listRes.ok) {
+      const errData = await listRes.json().catch(() => ({}));
+      throw new Error(errData.error || `Failed to fetch projects (${listRes.status})`);
+    }
+
+    const tData = await listRes.json();
+
+    setTasks(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tData.map((p: any) => ({
+        id: p._id,
+        title: p.title,
+        description: p.description,
+        startDate: p.createdAt?.slice(0, 10),
+        endDate: p.dueDate?.slice(0, 10) || "",
+        priority: p.priority,
+        status: p.status,
+        client: p.client?._id || "",
+        clientName: p.clientName || "Unknown Client",
+        subtasks: p.tags || [],
+      }))
+    );
+
+    setShowForm(false);
+    setEditingId(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (error: any) {
+    console.error("Save task error:", error);
+    toast.error(error.message || "Failed to save");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete task?")) return;
@@ -364,18 +393,17 @@ export default function ProjectBoard() {
             </div>
             <select
               value={form.client}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, client: e.target.value }))
-              }
+              onChange={(e) => setForm((f) => ({ ...f, client: e.target.value }))}
               className="w-full border p-2 rounded dark:bg-gray-800 dark:text-white"
             >
               <option value="">Select Client</option>
               {clients.map((c) => (
                 <option key={c._id} value={c._id}>
-                  {c.name}
+                  {c.name} 
                 </option>
               ))}
             </select>
+              
             <div className="flex gap-2">
               <select
                 value={form.priority}
