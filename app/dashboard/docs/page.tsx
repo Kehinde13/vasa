@@ -28,6 +28,7 @@ declare global {
 }
 
 type Doc = {
+  _id?: string; // MongoDB ID
   id: string;
   title: string;
   category: string;
@@ -65,85 +66,73 @@ export default function DocCentre() {
 
 
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-  const handleChange = (e: any) => {
-    const { name, value, files } = e.target;
-    if (name === "file" && files?.length) {
-      const newFile = files[0];
-      setForm({ ...form, file: newFile });
-      const reader = new FileReader();
-      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-      reader.onload = async (e: any) => {
-        const arrayBuffer = e.target?.result;
-        if (arrayBuffer instanceof ArrayBuffer) {
-          const result = await mammoth.convertToHtml({ arrayBuffer });
-          setDocs(prev => [...prev, {
-            id: crypto.randomUUID(),
-            title: newFile.name,
-            category: "Uploaded",
-            file: newFile,
-            content: result.value,
-          }]);
-        }
-      };
-      reader.readAsArrayBuffer(newFile);
-    } else {
-      setForm({ ...form, [name]: value });
-    }
-  };
+const handleChange = (e: any) => {
+  const { name, value, files } = e.target;
+
+  if (name === "file" && files?.length) {
+    const newFile = files[0];
+    setForm({ ...form, file: newFile });
+  } else {
+    setForm({ ...form, [name]: value });
+  }
+};
+
 
   const handleSave = async () => {
   if (!form.title || (!form.file && !form.content.trim())) return;
+  if (!user?.id) return alert("User not authenticated");
 
-  if (editingDocId) {
-    // Local update only (no backend update for now)
-    setDocs(docs.map((doc) =>
-      doc.id === editingDocId ? { ...form, id: editingDocId } : doc
-    ));
-  } else {
-    if (!user?.id) return alert("User not authenticated");
+  try {
+    let content = form.content;
 
-    try {
-      if (form.file) {
-        // Upload file + metadata via FormData
-        const formData = new FormData();
-        formData.append("title", form.title);
-        formData.append("category", form.category || "Uploaded");
-        formData.append("owner", user.id);
-        formData.append("type", "upload");
-        formData.append("content", form.content); // optional
-        formData.append("file", form.file);
-
-        const res = await fetch("https://vasabackend.onrender.com/api/documents", {
-          method: "POST",
-          body: formData,
-        });
-
-        const newDoc = await res.json();
-        setDocs((prev) => [...prev, newDoc]);
-      } else {
-        // Manual content (no file)
-        const payload = {
-          title: form.title,
-          category: form.category || "Manual",
-          owner: user.id,
-          content: form.content,
-          type: "manual",
-        };
-
-        const res = await fetch("https://vasabackend.onrender.com/api/documents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-        const newDoc = await res.json();
-        setDocs((prev) => [...prev, newDoc]);
-        toast.success("Document saved successfully");
-      }
-    } catch (err) {
-      console.error("Failed to save document:", err);
-      toast.error("Error saving document");
+    // If it's a .docx, convert to HTML before upload
+    if (form.file && form.file.name.endsWith(".docx")) {
+      const arrayBuffer = await form.file.arrayBuffer();
+      const result = await mammoth.convertToHtml({ arrayBuffer });
+      content = result.value;
     }
+
+    if (form.file) {
+      // Upload file + metadata via FormData
+      const formData = new FormData();
+      formData.append("title", form.title);
+      formData.append("category", form.category || "Uploaded");
+      formData.append("owner", user.id);
+      formData.append("type", "upload");
+      formData.append("content", content || "");
+      formData.append("file", form.file);
+
+      const res = await fetch("https://vasabackend.onrender.com/api/documents", {
+        method: "POST",
+        body: formData,
+      });
+
+      const newDoc = await res.json();
+      setDocs((prev) => [...prev, newDoc]);
+      toast.success("Document uploaded successfully");
+    } else {
+      // Manual content (no file)
+      const payload = {
+        title: form.title,
+        category: form.category || "Manual",
+        owner: user.id,
+        content: content,
+        type: "manual",
+      };
+
+      const res = await fetch("https://vasabackend.onrender.com/api/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const newDoc = await res.json();
+      setDocs((prev) => [...prev, newDoc]);
+      toast.success("Document saved successfully");
+    }
+  } catch (err) {
+    console.error("Failed to save document:", err);
+    toast.error("Error saving document");
   }
 
   setShowModal(false);
@@ -152,17 +141,51 @@ export default function DocCentre() {
 };
 
 
+const handleDelete = async (id: string) => {
+  try {
+    // Make sure we're using the right ID
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const docId = id || docs.find(d => d.id === id || (d as any)._id === id)?._id;
+    
+    if (!docId) {
+      toast.error('Document ID not found');
+      return;
+    }
 
-  const handleEdit = (doc: Doc) => {
-    setForm(doc);
-    setEditingDocId(doc.id);
-    setShowModal(true);
-  };
+    // Show confirmation dialog
+    if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+      return;
+    }
 
-  const handleDelete = (id: string) => {
-    setDocs(docs.filter(doc => doc.id !== id));
-    toast.error("Document deleted successfully");
-  };
+    // Delete from backend
+    const response = await fetch(`https://vasabackend.onrender.com/api/documents/${docId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    // If backend deletion successful, remove from frontend state
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setDocs(docs.filter(doc => (doc.id || (doc as any)._id) !== docId));
+    
+    toast.success("Document deleted successfully");
+  } catch (error) {
+    toast.error(`Failed to delete document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+};
+
+const handleEdit = (doc: Doc) => {
+  setForm(doc);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  setEditingDocId(doc.id || (doc as any)._id);
+  setShowModal(true);
+};
 
   const getFileIcon = (fileName: string) => {
     if (fileName.endsWith(".doc") || fileName.endsWith(".docx")) return <FileInput className="text-blue-600 dark:text-blue-400 w-5 h-5" />;
@@ -188,8 +211,16 @@ useEffect(() => {
         `https://vasabackend.onrender.com/api/documents?owner=${userId}`
       );
       const data = await res.json();
+      
+      // Fix the mapping - make sure id is properly set
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setDocs(data.map((d: any) => ({ ...d, id: d._id })));
+      const mappedDocs = data.map((d: any) => ({
+        ...d,
+        id: d._id || d.id, // Use _id from MongoDB or fallback to id
+      }));
+      
+      
+      setDocs(mappedDocs);
     } catch (err) {
       console.error('Failed fetching docs', err);
     }
@@ -271,21 +302,97 @@ useEffect(() => {
 };
 
 
-  useEffect(() => {
-    if (previewDoc?.file && previewDoc.file.name.endsWith(".docx")) {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const arrayBuffer = e.target?.result;
-        if (arrayBuffer instanceof ArrayBuffer) {
-          const result = await mammoth.convertToHtml({ arrayBuffer });
-          setDocxHTML(result.value);
-        }
-      };
-      reader.readAsArrayBuffer(previewDoc.file);
-    } else {
-      setDocxHTML("");
+const handlePreview = async (doc: Doc) => {
+  try {
+    
+    // Use either doc.id or doc._id, whichever exists
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const documentId = doc.id || (doc as any)._id;
+    
+    if (!documentId) {
+      toast.error('Document ID not found');
+      return;
     }
-  }, [previewDoc]);
+    
+    setDocxHTML(""); // Reset previous content
+    
+    // Case 1: File already exists in memory (uploaded in same session)
+    if (doc.file instanceof File) {
+      if (doc.file.name.endsWith(".docx")) {
+        const arrayBuffer = await doc.file.arrayBuffer();
+        const result = await mammoth.convertToHtml({ arrayBuffer });
+        setDocxHTML(result.value);
+      }
+      setPreviewDoc(doc);
+      return;
+    }
+
+    // Case 2: Need to fetch from backend
+    const fileUrl = `https://vasabackend.onrender.com/api/documents/${documentId}/file`;
+    
+    const res = await fetch(fileUrl);
+    
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+
+    // Check if response is JSON (content-only) or a file
+    const contentType = res.headers.get('content-type');
+    
+    if (contentType && contentType.includes('application/json')) {
+      // This is a content-only document
+      const data = await res.json();
+      setPreviewDoc({
+        ...doc,
+        content: data.content,
+        file: null
+      });
+      return;
+    }
+
+    // This is a file response
+    const blob = await res.blob();
+    
+    // Create filename from content-disposition header or use doc title
+    let fileName = doc.title || 'document';
+    const disposition = res.headers.get('content-disposition');
+    if (disposition && disposition.includes('filename=')) {
+      const filenameMatch = disposition.match(/filename="(.+)"/);
+      if (filenameMatch) {
+        fileName = filenameMatch[1];
+      }
+    } else {
+      // Guess extension from content-type
+      const mimeType = res.headers.get('content-type');
+      if (mimeType?.includes('pdf')) fileName += '.pdf';
+      else if (mimeType?.includes('wordprocessingml')) fileName += '.docx';
+      else if (mimeType?.includes('msword')) fileName += '.doc';
+      else if (mimeType?.includes('spreadsheetml')) fileName += '.xlsx';
+      else if (mimeType?.includes('ms-excel')) fileName += '.xls';
+    }
+
+    const file = new File([blob], fileName, { type: blob.type });
+
+    // Convert DOCX to HTML for preview
+    if (fileName.endsWith('.docx')) {
+      try {
+        const arrayBuffer = await blob.arrayBuffer();
+        const result = await mammoth.convertToHtml({ arrayBuffer });
+        setDocxHTML(result.value);
+      } catch (conversionError) {
+        console.error('Error converting DOCX:', conversionError);
+        toast.error('Error converting document for preview');
+      }
+    }
+
+    setPreviewDoc({ ...doc, file });
+    
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (err: any) {
+    console.error('Failed to fetch file for preview:', err);
+    toast.error(`Unable to preview document: ${err.message}`);
+  }
+};
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
@@ -328,9 +435,9 @@ useEffect(() => {
 
       {/* Document Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredDocs.map((doc) => (
+        {filteredDocs.map((doc, index) => (
           <div
-            key={doc.id}
+            key={index}
             className="border dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900 shadow-sm space-y-2"
           >
             <div className="flex items-center gap-2">
@@ -343,11 +450,11 @@ useEffect(() => {
             )}
             <div className="flex gap-2 mt-2 text-xs">
               <button
-                onClick={() => setPreviewDoc(doc)}
+                onClick={() => handlePreview(doc)}
                 className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
               >
                 <Eye className="w-4 h-4" /> View
-              </button>
+              </button> 
               <button
                 onClick={() => handleEdit(doc)}
                 className="text-green-600 dark:text-green-400 hover:underline flex items-center gap-1"
@@ -366,9 +473,10 @@ useEffect(() => {
       </div>
 
       {/* Preview Modal */}
-      {previewDoc && (
+     {previewDoc && (
         <div className="fixed inset-0 bg-black/60 z-50 backdrop-blur-sm flex justify-center items-center px-4">
           <div className="bg-white dark:bg-gray-900 w-full max-w-3xl rounded-lg p-6 space-y-4 shadow-xl max-h-[90vh] overflow-auto">
+            {/* Header remains the same */}
             <div className="flex justify-between items-start">
               <div>
                 <h2 className="text-lg font-semibold dark:text-white">{previewDoc.title}</h2>
@@ -387,23 +495,29 @@ useEffect(() => {
               </button>
             </div>
 
-            {previewDoc.file?.name.endsWith(".docx") ? (
-              <div
-                className="prose prose-sm dark:prose-invert max-w-none"
-                dangerouslySetInnerHTML={{ __html: docxHTML }}
-              />
-            ) : previewDoc.file?.type === "application/pdf" ? (
-              <iframe
-                src={URL.createObjectURL(previewDoc.file)}
-                className="w-full h-96 border rounded"
-              />
-            ) : previewDoc.content ? (
-              <div className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
-                {previewDoc.content}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-600 dark:text-gray-300">No preview available</p>
-            )}
+            {/* Fixed content rendering */}
+            <div className="border rounded p-4 max-h-96 overflow-y-auto">
+              {previewDoc.file?.name.endsWith(".docx") ? (
+                <div
+                  className="prose prose-sm dark:prose-invert max-w-none"
+                  dangerouslySetInnerHTML={{ 
+                    __html: previewDoc.content || docxHTML || "Converting document..." 
+                  }}
+                />
+              ) : previewDoc.file?.type === "application/pdf" ? (
+                <iframe
+                  src={URL.createObjectURL(previewDoc.file)}
+                  className="w-full h-96 border rounded"
+                  title="PDF Preview"
+                />
+              ) : previewDoc.content ? (
+                <div className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
+                  {previewDoc.content}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-600 dark:text-gray-300">No preview available</p>
+              )}
+            </div>
 
             {previewDoc.file && (
               <a
